@@ -1,15 +1,15 @@
 # livebot
 
-To install dependencies:
+## Setup
 
-```bash
-bun install
+Create a `.env.local` file with the following:
+
+```
+DISCORD_TOKEN = "Your bot token from discord.dev"
 ```
 
-To run:
+## Start
 
-```bash
-bun run index.ts
+```sh
+bun index.ts
 ```
-
-This project was created using `bun init` in bun v1.2.18. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
