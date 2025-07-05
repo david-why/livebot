@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "dev": "bun --watch --no-clear-screen src/index.ts",
     "serve": "bun src/index.ts"
   },
   "devDependencies": {

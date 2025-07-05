@@ -11,9 +11,16 @@ client.once("ready", async () => {
   console.log(`Logged in as ${client.user?.tag}!`)
 })
 
+client.on("error", (error) => {
+  console.error(error)
+})
+
 client.on("interactionCreate", async (interaction) => {
   // handle slash commands
   if (interaction.isChatInputCommand()) {
+    console.log(
+      `[INTR] /${interaction.commandName} ${interaction.options.data.map((o) => o.value)}`,
+    )
     try {
       await commands.get(interaction.commandName)?.execute(interaction)
     } catch (error) {

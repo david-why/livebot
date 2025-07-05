@@ -2,6 +2,10 @@ import { Database } from "bun:sqlite"
 
 const { DB_FILENAME = "data.db" } = process.env
 
+class ConfigValue {
+  constructor(public value: string) {}
+}
+
 class LiveDatabase {
   private database: Database
 
@@ -39,7 +43,40 @@ class LiveDatabase {
         FOREIGN KEY (lesson_id) REFERENCES lessons(id),
         FOREIGN KEY (instructor_id) REFERENCES instructors(id)
       );
+      CREATE TABLE IF NOT EXISTS config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `)
+  }
+
+  private _configCache = new Map<string, string | null>()
+  private fetchConfigValue(key: string): string | null {
+    if (!this._configCache.has(key)) {
+      const row = this.database
+        .query("SELECT value FROM config WHERE key = ?")
+        .as(ConfigValue)
+        .get(key)
+      this._configCache.set(key, row ? row.value : null)
+    }
+    return this._configCache.get(key) || null
+  }
+  private setConfigValue(key: string, value: string | null): void {
+    this._configCache.set(key, value)
+    if (value === null) {
+      this.database.query("DELETE FROM config WHERE key = ?").run(key)
+    } else {
+      this.database
+        .query("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)")
+        .run(key, value)
+    }
+  }
+
+  get subChannelId(): string | null {
+    return this.fetchConfigValue("sub_channel_id")
+  }
+  set subChannelId(value: string | null) {
+    this.setConfigValue("sub_channel_id", value)
   }
 }
 
