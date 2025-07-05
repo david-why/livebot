@@ -11,7 +11,7 @@ import * as course from "./course"
 
 declare global {
   type ClientEventHandlers = {
-    [K in keyof ClientEvents]?: (...args: ClientEvents[K]) => Promise<void>
+    [K in keyof ClientEvents]: (...args: ClientEvents[K]) => Promise<unknown>
   }
 }
 
@@ -20,7 +20,7 @@ const commands = new Collection<
   {
     command: SharedSlashCommand
     execute: (interaction: ChatInputCommandInteraction) => Promise<unknown>
-    events?: ClientEventHandlers
+    events?: Partial<ClientEventHandlers>
   }
 >()
 

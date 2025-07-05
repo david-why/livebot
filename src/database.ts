@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite"
 import { Course } from "./models/course"
+import { CourseCreationFlow } from "./models/course_creation"
 
 const { DB_FILENAME = "data.db" } = process.env
 
@@ -48,6 +49,21 @@ class LiveDatabase {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+    `)
+    // specifically discord related tables
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS d_course_creation (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_id TEXT NOT NULL UNIQUE,
+        user_id TEXT NOT NULL,
+        webhook_id TEXT NOT NULL,
+        course_id INTEGER NOT NULL,
+        module INTEGER NOT NULL,
+        -- stage 0: waiting for dates
+        stage INTEGER NOT NULL DEFAULT 0,
+        updated_at REAL NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_d_course_creation_channel_user ON d_course_creation (channel_id, user_id);
     `)
   }
 
@@ -99,6 +115,51 @@ class LiveDatabase {
     this.database
       .query("INSERT INTO courses (id, module) VALUES (?, ?)")
       .run(id, module)
+  }
+
+  addCourseCreation(
+    channelId: string,
+    userId: string,
+    webhookId: string,
+    courseId: number,
+    module: number,
+  ) {
+    const now = Date.now()
+    this.database
+      .query(
+        `INSERT INTO d_course_creation (channel_id, user_id, webhook_id, course_id, module, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(channelId, userId, webhookId, courseId, module, now)
+  }
+  getCourseCreation(channelId: string, userId: string) {
+    return this.database
+      .query(
+        `SELECT * FROM d_course_creation WHERE channel_id = ? AND user_id = ?`,
+      )
+      .as(CourseCreationFlow)
+      .get(channelId, userId)
+  }
+  removeCourseCreation(channelId: string, userId: string) {
+    this.database
+      .query(
+        `DELETE FROM d_course_creation WHERE channel_id = ? AND user_id = ?`,
+      )
+      .run(channelId, userId)
+  }
+
+  addCourseDate(courseId: number, date: Date): void {
+    this.database
+      .query("INSERT INTO lessons (course_id, date) VALUES (?, ?)")
+      .run(courseId, date.getTime())
+  }
+  getCourseDates(courseId: number): Date[] {
+    return this.database
+      .query<{ date: number }, number>(
+        "SELECT date FROM lessons WHERE course_id = ?",
+      )
+      .all(courseId)
+      .map((row) => new Date(row.date))
   }
 }
 
