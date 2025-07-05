@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite"
+import { Course } from "./models/course"
 
 const { DB_FILENAME = "data.db" } = process.env
 
@@ -77,6 +78,27 @@ class LiveDatabase {
   }
   set subChannelId(value: string | null) {
     this.setConfigValue("sub_channel_id", value)
+  }
+
+  getAllCourses(): Course[] {
+    return this.database
+      .query("SELECT id, module FROM courses")
+      .as(Course)
+      .all()
+  }
+  getCourse(id: number): Course | null {
+    return (
+      this.database
+        .query("SELECT id, module FROM courses WHERE id = ?")
+        .as(Course)
+        .get(id) || null
+    )
+  }
+  addCourse(id: number, module: number): void {
+    // Insert new course
+    this.database
+      .query("INSERT INTO courses (id, module) VALUES (?, ?)")
+      .run(id, module)
   }
 }
 

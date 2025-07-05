@@ -1,9 +1,14 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js"
+import {
+  ChatInputCommandInteraction,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from "discord.js"
 import { db } from "../database"
 
 export const command = new SlashCommandBuilder()
   .setName("config")
   .setDescription("Configure the bot settings")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((sub) =>
     sub
       .setName("sub-channel")
