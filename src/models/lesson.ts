@@ -12,4 +12,7 @@ export class Lesson {
   get date(): Date {
     return new Date(this.date_timestamp)
   }
+  set date(value: Date) {
+    this.date_timestamp = value.getTime()
+  }
 }

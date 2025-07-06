@@ -1,9 +1,11 @@
 import {
   ActionRowBuilder,
   ChatInputCommandInteraction,
+  ComponentType,
   PermissionFlagsBits,
   SlashCommandBuilder,
   StringSelectMenuBuilder,
+  TextChannel,
 } from "discord.js"
 import { db } from "../database"
 import { formatTimestamp } from "../utils/format"
@@ -256,13 +258,31 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (editDates) {
       const userTimezone = db.getUserTimezone(interaction.user.id) ?? "UTC"
       const lessons = db.getCourseLessons(id)
-      await interaction.reply({
+      const response = await interaction.reply({
         content: `Please select a lesson from LIVE #${id} below to edit.\n\n-# Times are in \`${userTimezone}\`; use /timezone to change it.`,
         components: [
           new ActionRowBuilder()
             .addComponents(
               new StringSelectMenuBuilder()
-                .setCustomId("course_edit_lesson")
+                .setCustomId(`edit`)
+                .setPlaceholder("Select a lesson to edit")
+                .addOptions(
+                  lessons.map((lesson) => ({
+                    label: lesson.date.toLocaleString("en-US", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                      timeZone: userTimezone,
+                    }),
+                    value: lesson.id.toString(),
+                  })),
+                ),
+            )
+            .toJSON(),
+          new ActionRowBuilder()
+            .addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId(`delete`)
+                .setPlaceholder("Select a lesson to delete")
                 .addOptions(
                   lessons.map((lesson) => ({
                     label: lesson.date.toLocaleString("en-US", {
@@ -276,7 +296,81 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             )
             .toJSON(),
         ],
+        withResponse: true,
       })
+      const message = response.resource!.message!
+      let selectedLessonId: number
+      let action: "edit" | "delete"
+      try {
+        const result = await message.awaitMessageComponent({
+          componentType: ComponentType.StringSelect,
+          time: 10 * 60 * 1000,
+        }) // 10 minutes
+        await result.deferUpdate()
+        selectedLessonId = Number(result.values[0])
+        action = result.customId as "edit" | "delete"
+      } catch {
+        return interaction.editReply({
+          components: [],
+        })
+      }
+      const selectedLesson = lessons.find(
+        (lesson) => lesson.id === selectedLessonId,
+      )!
+      if (action === "edit") {
+        const response = await interaction.followUp({
+          content: `Please enter the new date for the lesson on ${selectedLesson.date.toLocaleString(
+            "en-US",
+            {
+              dateStyle: "short",
+              timeStyle: "short",
+              timeZone: userTimezone,
+            },
+          )} (in UTC):\n\nUse \`cancel\` to cancel.`,
+          withResponse: true,
+        })
+        let newDate: Date | null = null
+        try {
+          const message = await (response.channel as TextChannel).awaitMessages(
+            {
+              filter: (m) => m.author.id === interaction.user.id,
+              max: 1,
+              time: 10 * 60 * 1000,
+              errors: ["time"],
+            },
+          )
+          const content = message.first()!.content.trim()
+          if (content === "cancel") {
+            return interaction.followUp("Canceled.")
+          }
+          // FIXME: Parse as UTC date like in /course add
+          const parsedDate = Date.parse(content)
+          if (!isNaN(parsedDate)) {
+            newDate = new Date(parsedDate)
+          }
+        } catch {
+          return interaction.followUp({
+            content: "No date provided in the given time. Please try again.",
+          })
+        }
+        if (!newDate) {
+          return interaction.followUp({
+            content: "Invalid date format. Please use `YYYY-MM-DD HH:MM`.",
+          })
+        }
+        // Update lesson date
+        selectedLesson.date = newDate
+        db.updateLesson(selectedLesson)
+        return interaction.followUp({
+          content: `Lesson has been updated successfully.`,
+        })
+      } else if (action === "delete") {
+        // Delete lesson
+        db.removeLesson(selectedLessonId)
+        return interaction.followUp({
+          content: `Lesson has been deleted successfully.`,
+        })
+      }
     } else {
       await interaction.reply({
         content: `Course LIVE #${id} has been updated successfully.`,

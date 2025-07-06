@@ -145,6 +145,11 @@ class LiveDatabase {
       .as(Lesson)
       .all(courseId)
   }
+  updateLesson(lesson: Lesson): void {
+    this.database
+      .query("UPDATE lessons SET date_timestamp = ? WHERE id = ?")
+      .run(lesson.date.getTime(), lesson.id)
+  }
 
   getUserTimezone(discordId: string): string | null {
     return (
