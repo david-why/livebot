@@ -1,5 +1,5 @@
 import { Client } from "discord.js"
-import commands from "./commands"
+import commands, { contextCommands } from "./commands"
 import { formatOptions } from "./utils/format"
 
 const { DISCORD_TOKEN } = process.env
@@ -25,21 +25,31 @@ client.on("error", (error) => {
 
 client.on("interactionCreate", async (interaction) => {
   // handle slash commands
+  let handler: Promise<unknown> | undefined
   if (interaction.isChatInputCommand()) {
     console.log(
       `[SLASH] /${interaction.commandName}`,
       formatOptions(interaction.options.data),
       `(@${interaction.user.tag}, <#${interaction.channelId}>)`,
     )
-    try {
-      await commands.get(interaction.commandName)?.execute(interaction)
-    } catch (error) {
-      console.error("Error executing command:", error)
+    handler = commands.get(interaction.commandName)?.execute(interaction)
+  } else if (interaction.isContextMenuCommand()) {
+    // handle context menu commands
+    console.log(
+      `[CNTXT] ${interaction.commandName} (@${interaction.user.tag}, <#${interaction.channelId}>)`,
+    )
+    handler = contextCommands.get(interaction.commandName)?.execute(interaction)
+  }
+  try {
+    await handler
+  } catch (error) {
+    console.error("Error executing context command:", error)
+    if (interaction.isRepliable()) {
       await (
         interaction.replied || interaction.deferred
           ? interaction.followUp
           : interaction.reply
-      )({
+      ).call(interaction, {
         content: "There was an error while executing this command.",
         flags: "Ephemeral",
       })

@@ -45,6 +45,18 @@ export const command = new SlashCommandBuilder()
               value: m,
             })),
           ),
+      )
+      .addUserOption((option) =>
+        option
+          .setName("instructor1")
+          .setDescription("First instructor for the course")
+          .setRequired(true),
+      )
+      .addUserOption((option) =>
+        option
+          .setName("instructor2")
+          .setDescription("Second instructor for the course")
+          .setRequired(true),
       ),
   )
 
@@ -55,7 +67,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (courses.length === 0) {
       return interaction.reply({
         content: "No courses found.",
-        flags: "Ephemeral",
       })
     }
     const courseList = courses
@@ -63,11 +74,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       .join("\n")
     await interaction.reply({
       content: `Existing courses:\n${courseList}`,
-      flags: "Ephemeral",
     })
   } else if (subcommand === "add") {
     const id = interaction.options.getNumber("id", true)
     const module = interaction.options.getNumber("module", true)
+    const instructor1User = interaction.options.getUser("instructor1", true)
+    const instructor2User = interaction.options.getUser("instructor2", true)
 
     // Check if course already exists
     const existingCourse = db.getCourse(id)
@@ -76,6 +88,20 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         content: `Course with ID ${id} already exists.`,
         flags: "Ephemeral",
       })
+    }
+
+    const instructorUsers = [instructor1User, instructor2User]
+    const instructorIds: number[] = []
+    for (const user of instructorUsers) {
+      // Check if instructor already exists
+      const instructor = db.getInstructor(user.id)
+      if (!instructor) {
+        return interaction.reply({
+          content: `Instructor <@${user.id}> is not registered. Please register them first using the \`/instructor add\` command.`,
+          flags: "Ephemeral",
+        })
+      }
+      instructorIds.push(instructor.id)
     }
 
     await interaction.reply({
@@ -92,6 +118,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const handler: ClientEventHandlers["messageCreate"] = async (message) => {
       if (message.author.bot) return
+      if (message.channel.id !== interaction.channelId) return
+      if (message.author.id !== interaction.user.id) return
 
       // Check for cancellation
       if (message.content.toLowerCase() === "cancel") {
@@ -124,6 +152,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       for (const date of dates) {
         db.addCourseDate(id, date)
       }
+      db.addCourseInstructors(id, instructorIds)
 
       handlerCleanup()
       await interaction.followUp({
