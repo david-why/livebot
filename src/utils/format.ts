@@ -27,3 +27,7 @@ export function formatOptions(options: readonly CommandInteractionOption[]) {
     })
     .join(", ")
 }
+
+export function formatTimestamp(date: Date, format: string = 'F'): string {
+  return `<t:${Math.floor(date.getTime() / 1000)}:${format}>`
+}

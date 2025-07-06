@@ -24,6 +24,7 @@ import * as ping from "./ping"
 import * as config from "./config"
 import * as course from "./course"
 import * as instructor from "./instructor"
+import * as timezone from "./timezone"
 
 const commands = new Collection<
   string,
@@ -38,6 +39,7 @@ register(commands, ping)
 register(commands, config)
 register(commands, course)
 register(commands, instructor)
+register(commands, timezone)
 
 export default commands
 

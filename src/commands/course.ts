@@ -1,9 +1,13 @@
 import {
+  ActionRowBuilder,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
 } from "discord.js"
 import { db } from "../database"
+import { formatTimestamp } from "../utils/format"
+import { modules } from "../consts"
 
 export const command = new SlashCommandBuilder()
   .setName("course")
@@ -39,12 +43,7 @@ export const command = new SlashCommandBuilder()
           .setName("module")
           .setDescription("Module number of the course")
           .setRequired(true)
-          .setChoices(
-            [0, 1, 2, 3, 4, 5].map((m) => ({
-              name: `Module ${m}`,
-              value: m,
-            })),
-          ),
+          .setChoices(modules),
       )
       .addUserOption((option) =>
         option
@@ -59,9 +58,51 @@ export const command = new SlashCommandBuilder()
           .setRequired(true),
       ),
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName("edit")
+      .setDescription("Edit an existing course")
+      .addNumberOption((option) =>
+        option
+          .setName("id")
+          .setDescription("ID of the course to edit")
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addNumberOption((option) =>
+        option
+          .setName("module")
+          .setDescription("Module number of the course")
+          .setRequired(false)
+          .setChoices(modules),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName("dates")
+          .setDescription("Whether to edit the course dates")
+          .setRequired(false),
+      ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("remove")
+      .setDescription("Remove an existing course")
+      .addNumberOption((option) =>
+        option
+          .setName("id")
+          .setDescription("ID of the course to remove")
+          .setRequired(true)
+          .setAutocomplete(true),
+      ),
+  )
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  const subcommand = interaction.options.getSubcommand(true) as "list" | "add"
+  const subcommand = interaction.options.getSubcommand(true) as
+    | "list"
+    | "info"
+    | "add"
+    | "edit"
+    | "remove"
   if (subcommand === "list") {
     const courses = db.getAllCourses()
     if (courses.length === 0) {
@@ -137,7 +178,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         const trimmed = line.trim()
         if (!trimmed) continue // Skip empty lines
 
-        const date = new Date(trimmed)
+        // Parse date
+        const [datePart, timePart] = trimmed.split(" ")
+        const dateTimeString = `${datePart}T${timePart}:00Z` // Append seconds and Z for UTC
+        const date = new Date(dateTimeString)
         if (isNaN(date.getTime())) {
           await message.delete()
           return message.reply({
@@ -150,7 +194,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       db.addCourse(id, module)
       for (const date of dates) {
-        db.addCourseDate(id, date)
+        db.addCourseLesson(id, date)
       }
       db.addCourseInstructors(id, instructorIds)
 
@@ -162,8 +206,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     const timeout = setTimeout(
-      () => {
-        interaction.followUp({
+      async () => {
+        await interaction.followUp({
           content: "Course creation timed out. Please try again.",
         })
         interaction.client.off("messageCreate", handler)
@@ -181,17 +225,78 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         flags: "Ephemeral",
       })
     }
-    const dates = db.getCourseDates(id)
-    if (dates.length === 0) {
-      return interaction.reply({
-        content: `Course LIVE #${id} (Module ${course.module}) has no dates scheduled.`,
-      })
-    }
-    const dateList = dates
-      .map((date) => `- ${date.toISOString().replace("T", " ")}`)
+    const instructors = db.getCourseInstructors(id)
+    const lessons = db.getCourseLessons(id)
+    const scheduledDates = lessons
+      .map((lesson) => `- ${formatTimestamp(lesson.date)}`)
       .join("\n")
     await interaction.reply({
-      content: `Course LIVE #${id} (Module ${course.module}) has the following dates scheduled:\n${dateList}`,
+      content:
+        `Course LIVE #${id} (Module ${course.module})\n` +
+        `Instructors: ${instructors.map((i) => `<@${i.discord_id}>`).join(", ")}\n` +
+        `Scheduled dates:\n${scheduledDates}`,
+      allowedMentions: { users: [] },
+    })
+  } else if (subcommand === "edit") {
+    const id = interaction.options.getNumber("id", true)
+    const module = interaction.options.getNumber("module")
+    const editDates = interaction.options.getBoolean("dates") ?? false
+
+    const course = db.getCourse(id)
+    if (!course) {
+      return interaction.reply({
+        content: `Course with ID ${id} not found.`,
+        flags: "Ephemeral",
+      })
+    }
+
+    if (module) course.module = module
+    db.updateCourse(course)
+
+    if (editDates) {
+      const userTimezone = db.getUserTimezone(interaction.user.id) ?? "UTC"
+      const lessons = db.getCourseLessons(id)
+      await interaction.reply({
+        content: `Please select a lesson from LIVE #${id} below to edit.\n\n-# Times are in \`${userTimezone}\`; use /timezone to change it.`,
+        components: [
+          new ActionRowBuilder()
+            .addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId("course_edit_lesson")
+                .addOptions(
+                  lessons.map((lesson) => ({
+                    label: lesson.date.toLocaleString("en-US", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                      timeZone: userTimezone,
+                    }),
+                    value: lesson.id.toString(),
+                  })),
+                ),
+            )
+            .toJSON(),
+        ],
+      })
+    } else {
+      await interaction.reply({
+        content: `Course LIVE #${id} has been updated successfully.`,
+      })
+    }
+  } else if (subcommand === "remove") {
+    const id = interaction.options.getNumber("id", true)
+    const course = db.getCourse(id)
+    if (!course) {
+      return interaction.reply({
+        content: `Course with ID ${id} not found.`,
+        flags: "Ephemeral",
+      })
+    }
+
+    // Remove course and its lessons
+    db.removeCourse(id)
+
+    await interaction.reply({
+      content: `Course LIVE #${id} has been removed successfully.`,
     })
   }
 }

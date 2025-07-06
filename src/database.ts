@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite"
 import { Course } from "./models/course"
-import { CourseCreationFlow } from "./models/course_creation"
 import { Instructor } from "./models/instructor"
+import { Lesson } from "./models/lesson"
 
 const { DB_FILENAME = "data.db" } = process.env
 
@@ -14,6 +14,7 @@ class LiveDatabase {
 
   constructor(filename: string) {
     this.database = new Database(filename)
+    this.database.exec("PRAGMA foreign_keys = ON")
   }
 
   public createTables(): void {
@@ -57,10 +58,7 @@ class LiveDatabase {
   }
 
   getAllInstructors(): Instructor[] {
-    return this.database
-      .query("SELECT * FROM instructors")
-      .as(Instructor)
-      .all()
+    return this.database.query("SELECT * FROM instructors").as(Instructor).all()
   }
   getInstructor(discordId: string): Instructor | null {
     return (
@@ -101,6 +99,14 @@ class LiveDatabase {
       .query("INSERT INTO courses (id, module) VALUES (?, ?)")
       .run(id, module)
   }
+  updateCourse(course: Course): void {
+    this.database
+      .query("UPDATE courses SET module = ? WHERE id = ?")
+      .run(course.module, course.id)
+  }
+  removeCourse(id: number): void {
+    this.database.query("DELETE FROM courses WHERE id = ?").run(id)
+  }
 
   addCourseInstructors(courseId: number, instructorIds: number[]): void {
     if (instructorIds.length === 0) return
@@ -126,49 +132,36 @@ class LiveDatabase {
       .all(courseId)
   }
 
-  addCourseCreation(
-    channelId: string,
-    userId: string,
-    webhookId: string,
-    courseId: number,
-    module: number,
-  ) {
-    const now = Date.now()
+  addCourseLesson(courseId: number, date: Date): void {
     this.database
-      .query(
-        `INSERT INTO d_course_creation (channel_id, user_id, webhook_id, course_id, module, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(channelId, userId, webhookId, courseId, module, now)
-  }
-  getCourseCreation(channelId: string, userId: string) {
-    return this.database
-      .query(
-        `SELECT * FROM d_course_creation WHERE channel_id = ? AND user_id = ?`,
-      )
-      .as(CourseCreationFlow)
-      .get(channelId, userId)
-  }
-  removeCourseCreation(channelId: string, userId: string) {
-    this.database
-      .query(
-        `DELETE FROM d_course_creation WHERE channel_id = ? AND user_id = ?`,
-      )
-      .run(channelId, userId)
-  }
-
-  addCourseDate(courseId: number, date: Date): void {
-    this.database
-      .query("INSERT INTO lessons (course_id, date) VALUES (?, ?)")
+      .query("INSERT INTO lessons (course_id, date_timestamp) VALUES (?, ?)")
       .run(courseId, date.getTime())
   }
-  getCourseDates(courseId: number): Date[] {
+  getCourseLessons(courseId: number): Lesson[] {
     return this.database
-      .query<{ date: number }, number>(
-        "SELECT date FROM lessons WHERE course_id = ?",
+      .query(
+        "SELECT id, course_id, date_timestamp FROM lessons WHERE course_id = ?",
       )
+      .as(Lesson)
       .all(courseId)
-      .map((row) => new Date(row.date))
+  }
+
+  getUserTimezone(discordId: string): string | null {
+    return (
+      this.database
+        .query(
+          "SELECT value FROM user_config WHERE user_id = ? AND key = 'timezone'",
+        )
+        .as(ConfigValue)
+        .get(discordId)?.value || null
+    )
+  }
+  setUserTimezone(discordId: string, timezone: string): void {
+    this.database
+      .query(
+        "INSERT OR REPLACE INTO user_config (user_id, key, value) VALUES (?, 'timezone', ?)",
+      )
+      .run(discordId, timezone)
   }
 }
 
@@ -187,20 +180,21 @@ CREATE TABLE IF NOT EXISTS courses (
 CREATE TABLE IF NOT EXISTS course_instructors (
   course_id INTEGER NOT NULL,
   instructor_id INTEGER NOT NULL,
-  FOREIGN KEY (course_id) REFERENCES courses(id),
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
   FOREIGN KEY (instructor_id) REFERENCES instructors(id),
   PRIMARY KEY (course_id, instructor_id)
 );
 CREATE TABLE IF NOT EXISTS lessons (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   course_id INTEGER NOT NULL,
-  date REAL NOT NULL,
-  FOREIGN KEY (course_id) REFERENCES courses(id)
+  date_timestamp REAL NOT NULL,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS lesson_instructors (
   lesson_id INTEGER NOT NULL,
   instructor_id INTEGER NOT NULL,
-  FOREIGN KEY (lesson_id) REFERENCES lessons(id),
+  is_sub INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
   FOREIGN KEY (instructor_id) REFERENCES instructors(id),
   PRIMARY KEY (lesson_id, instructor_id)
 );
@@ -210,7 +204,7 @@ CREATE TABLE IF NOT EXISTS lesson_sub_requests (
   instructor_id INTEGER NOT NULL,
   is_open INTEGER NOT NULL DEFAULT 1,
   opened_at REAL NOT NULL,
-  FOREIGN KEY (lesson_id) REFERENCES lessons(id),
+  FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
   FOREIGN KEY (instructor_id) REFERENCES instructors(id)
 );
 CREATE TABLE IF NOT EXISTS config (
@@ -220,16 +214,10 @@ CREATE TABLE IF NOT EXISTS config (
 
 -- specifically discord related tables
 
-CREATE TABLE IF NOT EXISTS d_course_creation (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  channel_id TEXT NOT NULL UNIQUE,
-  user_id TEXT NOT NULL,
-  webhook_id TEXT NOT NULL,
-  course_id INTEGER NOT NULL,
-  module INTEGER NOT NULL,
-  -- stage 0: waiting for dates
-  stage INTEGER NOT NULL DEFAULT 0,
-  updated_at REAL NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_d_course_creation_channel_user ON d_course_creation (channel_id, user_id);
+CREATE TABLE IF NOT EXISTS user_config (
+  user_id TEXT,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
+)
 `
