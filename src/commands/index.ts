@@ -20,7 +20,6 @@ function register<T extends { command: { name: string } }>(
   commands.set(command.command.name, command)
 }
 
-import * as ping from "./ping"
 import * as config from "./config"
 import * as course from "./course"
 import * as instructor from "./instructor"
@@ -35,7 +34,6 @@ const commands = new Collection<
   }
 >()
 
-register(commands, ping)
 register(commands, config)
 register(commands, course)
 register(commands, instructor)
