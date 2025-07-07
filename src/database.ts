@@ -150,6 +150,9 @@ class LiveDatabase {
       .query("UPDATE lessons SET date_timestamp = ? WHERE id = ?")
       .run(lesson.date.getTime(), lesson.id)
   }
+  removeLesson(lessonId: number): void {
+    this.database.query("DELETE FROM lessons WHERE id = ?").run(lessonId)
+  }
 
   getUserTimezone(discordId: string): string | null {
     return (
