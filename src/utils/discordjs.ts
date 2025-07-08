@@ -3,6 +3,7 @@ import {
   ApplicationCommandOptionWithAutocompleteMixin,
   AutocompleteInteraction,
   ChatInputCommandInteraction,
+  SharedSlashCommand,
   SlashCommandBuilder,
   SlashCommandSubcommandBuilder,
   type ApplicationCommandOptionChoiceData,
@@ -35,8 +36,7 @@ export function wrapEventHandler<Params extends any[]>(
   outer: (...args: Params) => Promise<any>,
 ): (...args: Params) => Promise<any> {
   return async (...args: Params): Promise<any> => {
-    await outer(...args)
-    return handler?.(...args)
+    return Promise.all([handler?.(...args), outer(...args)])
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -111,4 +111,59 @@ export function createCommandGroup(
     },
     events,
   }
+}
+
+class SlashCommandExecuteBuilder {
+  constructor(
+    private _setHandler: (handler: SlashCommandHandler) => void,
+    private builder: SlashCommandBuilder,
+  ) {}
+
+  setHandler(handler: SlashCommandHandler): SlashCommandBuilder {
+    this._setHandler(handler)
+    return this.builder
+  }
+}
+
+export function createCommand(
+  builder: (builder: SlashCommandExecuteBuilder) => SharedSlashCommand,
+  options: {
+    autocomplete?: Record<string, AutocompleteHandler>
+    events?: Partial<ClientEventHandlers>
+  } = {},
+): {
+  command: SharedSlashCommand
+  execute: SlashCommandHandler
+  events: Partial<ClientEventHandlers>
+} {
+  const { autocomplete, events = {} } = options
+  let execute: SlashCommandHandler | undefined = undefined
+  const command = builder(
+    new SlashCommandExecuteBuilder((handler) => {
+      execute = handler
+    }, new SlashCommandBuilder()),
+  )
+  if (!execute) {
+    throw new Error("The .setHandler method of the builder must be called")
+  }
+  if (autocomplete) {
+    events.interactionCreate = wrapEventHandler(
+      events.interactionCreate,
+      async (interaction) => {
+        if (!interaction.isAutocomplete()) return
+        if (interaction.commandName !== command.name) return
+        const focusedOption = interaction.options.getFocused(true)
+        const handler = autocomplete[focusedOption.name]
+        if (!handler) return
+        const choices = await handler(interaction)
+        await interaction.respond(
+          choices.slice(0, 25).map((choice) => ({
+            name: choice.name,
+            value: choice.value,
+          })),
+        )
+      },
+    )
+  }
+  return { command, execute, events }
 }

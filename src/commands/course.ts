@@ -10,7 +10,7 @@ import {
 import { createCommandGroup } from "../utils/discordjs"
 import { db } from "../database"
 import { formatTimestamp } from "../utils/format"
-import { modules } from "../consts"
+import { lessonAbbreviations, lessonNames, modules } from "../consts"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
@@ -29,7 +29,8 @@ export const { command, execute, events } = createCommandGroup(
           option
             .setName("id")
             .setDescription("The ID of the course")
-            .setRequired(true),
+            .setRequired(true)
+            .setAutocomplete(true),
         ),
     add: (sub) =>
       sub
@@ -133,7 +134,13 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
   const instructors = db.getCourseInstructors(id)
   const lessons = db.getCourseLessons(id)
   const scheduledDates = lessons
-    .map((lesson) => `- ${formatTimestamp(lesson.date)}`)
+    .map((lesson) => {
+      const instructors = db.getLessonInstructors(lesson.id)
+      const instructorMentions = instructors
+        .map((i) => `<@${i.discord_id}>`)
+        .join(" & ")
+      return `- ${lesson.name}, ${instructorMentions} (${formatTimestamp(lesson.date)})`
+    })
     .join("\n")
   await interaction.reply({
     content:
@@ -224,10 +231,10 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
   }
 
   db.addCourse(id, module)
-  for (const date of dates) {
-    db.addCourseLesson(id, date)
-  }
   db.addCourseInstructors(id, instructorIds)
+  for (let i = 0; i < dates.length; i++) {
+    db.addCourseLesson(id, dates[i]!, lessonNames[i]!, lessonAbbreviations[i]!)
+  }
 
   await interaction.followUp({
     content: `Course LIVE #${id} M${module} created successfully with ${dates.length} date(s).`,

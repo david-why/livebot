@@ -5,6 +5,8 @@ export class Lesson {
     public id: number,
     public course_id: number,
     date: Date,
+    public name: string,
+    public abbrev: string,
   ) {
     this.date_timestamp = date.getTime()
   }
