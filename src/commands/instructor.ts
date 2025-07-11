@@ -57,7 +57,7 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
     })
   } else if (subcommand === "info") {
     const user = interaction.options.getUser("user", true)
-    const instructor = db.getInstructor(user.id)
+    const instructor = db.getInstructorByDiscordId(user.id)
     if (!instructor) {
       await interaction.reply({
         content: `User <@${user.id}> is not an instructor.`,
@@ -72,7 +72,7 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
   } else if (subcommand === "edit") {
     const user = interaction.options.getUser("user", true)
     const name = interaction.options.getString("name")
-    const instructor = db.getInstructor(user.id)
+    const instructor = db.getInstructorByDiscordId(user.id)
     if (!instructor) {
       await interaction.reply({
         content: `User <@${user.id}> is not an instructor.`,

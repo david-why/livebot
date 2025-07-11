@@ -3,6 +3,7 @@ import {
   BaseInteraction,
   ButtonBuilder,
   ButtonStyle,
+  Client,
   type ApplicationCommandOptionChoiceData,
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -35,6 +36,7 @@ export const { command, execute, events } = createCommand(
     },
     events: {
       interactionCreate: handleAcceptSubButton,
+      ready: onReady,
     },
   },
 )
@@ -43,7 +45,7 @@ async function handler(interaction: ChatInputCommandInteraction) {
   const lessonId = interaction.options.getNumber("lesson", true)
   const reason = interaction.options.getString("reason")
 
-  const instructor = db.getInstructor(interaction.user.id)
+  const instructor = db.getInstructorByDiscordId(interaction.user.id)
   if (!instructor) {
     return interaction.reply({
       content: "You are not registered as an instructor.",
@@ -87,7 +89,7 @@ async function handler(interaction: ChatInputCommandInteraction) {
 async function lessonAutocomplete(
   interaction: AutocompleteInteraction,
 ): Promise<ApplicationCommandOptionChoiceData[]> {
-  const instructorId = db.getInstructor(interaction.user.id)?.id
+  const instructorId = db.getInstructorByDiscordId(interaction.user.id)?.id
   if (!instructorId) {
     return []
   }
@@ -117,7 +119,7 @@ async function handleAcceptSubButton(interaction: BaseInteraction) {
     })
   }
 
-  const instructor = db.getInstructor(interaction.user.id)
+  const instructor = db.getInstructorByDiscordId(interaction.user.id)
   if (!instructor) {
     return interaction.reply({
       content: "You are not registered as an instructor.",
@@ -147,4 +149,53 @@ async function handleAcceptSubButton(interaction: BaseInteraction) {
       `<@${interaction.user.id}> has taken this sub request.`,
     components: [],
   })
+}
+
+async function checkSubRequests(client: Client<true>) {
+  const subRequests = db.getOpenSubRequests()
+  if (subRequests.length === 0) return
+
+  const notifyChannelId = db.subNotifyChannelId
+  if (!notifyChannelId) return
+
+  const channel = client.channels.cache.get(notifyChannelId)
+  if (!channel || !channel.isSendable()) return
+
+  const adminRoleId = db.adminRoleId
+  const adminPing = adminRoleId ? `<@&${adminRoleId}>` : "@admins"
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const promises: Promise<any>[] = []
+
+  for (const subRequest of subRequests) {
+    if (subRequest.sent_notification) return
+
+    const lesson = db.getLesson(subRequest.lesson_id)!
+    const now = new Date()
+    if (lesson.date.getTime() - now.getTime() > 24 * 60 * 60 * 1000) {
+      continue
+    }
+
+    const instructor = db.getInstructor(subRequest.instructor_id)
+    if (!instructor) continue
+
+    promises.push(
+      channel.send({
+        content: `‼️ ${adminPing} The sub request for lesson #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)} by <@${instructor.discord_id}> is still open! I will ping @Teaching 1 hour before the lesson, but it might be a good idea to start DMing people.`,
+        allowedMentions: {
+          roles: adminRoleId ? [adminRoleId] : [],
+          users: [],
+        },
+      }),
+    )
+
+    subRequest.sent_notification = 1
+    db.updateSubRequest(subRequest)
+  }
+
+  await Promise.all(promises)
+}
+
+async function onReady(client: Client<true>) {
+  setInterval(() => checkSubRequests(client), 60 * 1000)
 }

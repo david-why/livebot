@@ -58,10 +58,25 @@ class LiveDatabase {
     this.setConfigValue("sub_notify_channel_id", value)
   }
 
+  get adminRoleId(): string | null {
+    return this.fetchConfigValue("admin_role_id")
+  }
+  set adminRoleId(value: string | null) {
+    this.setConfigValue("admin_role_id", value)
+  }
+
   getAllInstructors(): Instructor[] {
     return this.database.query("SELECT * FROM instructors").as(Instructor).all()
   }
-  getInstructor(discordId: string): Instructor | null {
+  getInstructor(id: number): Instructor | null {
+    return (
+      this.database
+        .query("SELECT * FROM instructors WHERE id = ?")
+        .as(Instructor)
+        .get(id) || null
+    )
+  }
+  getInstructorByDiscordId(discordId: string): Instructor | null {
     return (
       this.database
         .query("SELECT * FROM instructors WHERE discord_id = ?")
@@ -250,6 +265,12 @@ class LiveDatabase {
       )
       .run(lessonId, instructorId, Date.now(), reason).lastInsertRowid as number
   }
+  getOpenSubRequests(): SubRequest[] {
+    return this.database
+      .query("SELECT * FROM sub_requests WHERE is_open = 1")
+      .as(SubRequest)
+      .all()
+  }
   getSubRequest(id: number): SubRequest | null {
     return (
       this.database
@@ -261,7 +282,7 @@ class LiveDatabase {
   updateSubRequest(subRequest: SubRequest) {
     this.database
       .query(
-        "UPDATE sub_requests SET lesson_id = ?, instructor_id = ?, is_open = ?, opened_at = ?, reason = ? WHERE id = ?",
+        "UPDATE sub_requests SET lesson_id = ?, instructor_id = ?, is_open = ?, opened_at = ?, reason = ?, sent_notification = ? WHERE id = ?",
       )
       .run(
         subRequest.lesson_id,
@@ -270,6 +291,7 @@ class LiveDatabase {
         subRequest.opened_at,
         subRequest.reason,
         subRequest.id,
+        subRequest.sent_notification,
       )
   }
 }
@@ -316,6 +338,7 @@ CREATE TABLE IF NOT EXISTS sub_requests (
   is_open INTEGER NOT NULL DEFAULT 1,
   opened_at REAL NOT NULL,
   reason TEXT,
+  sent_notification INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
   FOREIGN KEY (instructor_id) REFERENCES instructors(id)
 );

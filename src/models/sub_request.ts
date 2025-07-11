@@ -6,5 +6,13 @@ export class SubRequest {
     public is_open: number,
     public opened_at: number,
     public reason: string | null,
+    public sent_notification: number = 0,
   ) {}
+
+  get openedDate(): Date {
+    return new Date(this.opened_at)
+  }
+  set openedDate(date: Date) {
+    this.opened_at = date.getTime()
+  }
 }

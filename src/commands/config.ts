@@ -35,6 +35,17 @@ export const command = new SlashCommandBuilder()
       ),
   )
   .addSubcommand((sub) =>
+    sub
+      .setName("admin-role")
+      .setDescription("Set the admin role for the bot")
+      .addRoleOption((option) =>
+        option
+          .setName("role")
+          .setDescription("The role to set as admin")
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand((sub) =>
     sub.setName("get").setDescription("Get the current configuration"),
   )
 
@@ -42,6 +53,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const subcommand = interaction.options.getSubcommand(true) as
     | "sub-channel"
     | "sub-notify-channel"
+    | "admin-role"
     | "get"
   if (subcommand == "sub-channel") {
     db.subChannelId = interaction.options.getChannel("channel", true).id
@@ -53,16 +65,25 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.reply({
       content: `Sub notify channel set to <#${db.subNotifyChannelId}>`,
     })
+  } else if (subcommand == "admin-role") {
+    db.adminRoleId = interaction.options.getRole("role", true).id
+    await interaction.reply({
+      content: `Admin role set to <@&${db.adminRoleId}>.`,
+      allowedMentions: { roles: [] },
+    })
   } else if (subcommand == "get") {
     const subChannel = db.subChannelId ? `<#${db.subChannelId}>` : "not set"
     const subNotifyChannel = db.subNotifyChannelId
       ? `<#${db.subNotifyChannelId}>`
       : "not set"
+    const adminRole = db.adminRoleId ? `<@&${db.adminRoleId}>` : "not set"
     await interaction.reply({
       content:
         `Current configuration:\n` +
         `- Sub channel: ${subChannel}\n` +
-        `- Sub notify channel: ${subNotifyChannel}`,
+        `- Sub notify channel: ${subNotifyChannel}\n` +
+        `- Admin role: ${adminRole}`,
+      allowedMentions: { roles: [] },
     })
   }
 }

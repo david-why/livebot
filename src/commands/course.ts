@@ -170,7 +170,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
   const instructorIds: number[] = []
   for (const user of instructorUsers) {
     // Check if instructor already exists
-    const instructor = db.getInstructor(user.id)
+    const instructor = db.getInstructorByDiscordId(user.id)
     if (!instructor) {
       return interaction.reply({
         content: `Instructor <@${user.id}> is not registered. Please register them first using the \`/instructor add\` command.`,
