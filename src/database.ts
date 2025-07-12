@@ -144,6 +144,13 @@ class LiveDatabase {
       .as(Instructor)
       .all(courseId)
   }
+  removeCourseInstructor(courseId: number, instructorId: number): void {
+    this.database
+      .query(
+        "DELETE FROM course_instructors WHERE course_id = ? AND instructor_id = ?",
+      )
+      .run(courseId, instructorId)
+  }
 
   addCourseLesson(
     courseId: number,

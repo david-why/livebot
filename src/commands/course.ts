@@ -7,10 +7,12 @@ import {
   StringSelectMenuBuilder,
   TextChannel,
 } from "discord.js"
-import { createCommandGroup } from "../utils/discordjs"
-import { db } from "../database"
-import { formatTimestamp } from "../utils/format"
+import type { DateTime } from "luxon"
 import { lessonAbbreviations, lessonNames, modules } from "../consts"
+import { db } from "../database"
+import { parseDatesString } from "../utils/dates"
+import { createCommandGroup } from "../utils/discordjs"
+import { formatTimestamp } from "../utils/format"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
@@ -49,16 +51,71 @@ export const { command, execute, events } = createCommandGroup(
             .setRequired(true)
             .setChoices(modules),
         )
-        .addUserOption((option) =>
+        .addStringOption((option) =>
           option
-            .setName("instructor1")
-            .setDescription("First instructor for the course")
+            .setName("time")
+            .setDescription(
+              "The start time of the course in the given timezone, in the format HH:MM",
+            )
+            .setRequired(true),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("dates")
+            .setDescription(
+              "The dates of the course in the weird template format",
+            )
             .setRequired(true),
         )
         .addUserOption((option) =>
           option
+            .setName("instructor1")
+            .setDescription("First instructor for the course"),
+        )
+        .addUserOption((option) =>
+          option
             .setName("instructor2")
-            .setDescription("Second instructor for the course")
+            .setDescription("Second instructor for the course"),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("timezone")
+            .setDescription(
+              "Timezone for the course dates (default is 'America/New_York', e.g. 'Asia/Shanghai')",
+            ),
+        ),
+    "add-instructor": (sub) =>
+      sub
+        .setHandler(addInstructorCommand)
+        .setDescription("Add an instructor to a course")
+        .addNumberOption((option) =>
+          option
+            .setName("id")
+            .setDescription("The course to add the instructor to")
+            .setRequired(true)
+            .setAutocomplete(true),
+        )
+        .addUserOption((option) =>
+          option
+            .setName("instructor")
+            .setDescription("The instructor to add to the course")
+            .setRequired(true),
+        ),
+    "remove-instructor": (sub) =>
+      sub
+        .setHandler(removeInstructorCommand)
+        .setDescription("Remove an instructor from a course")
+        .addNumberOption((option) =>
+          option
+            .setName("id")
+            .setDescription("The course to remove the instructor from")
+            .setRequired(true)
+            .setAutocomplete(true),
+        )
+        .addUserOption((option) =>
+          option
+            .setName("instructor")
+            .setDescription("The instructor to remove from the course")
             .setRequired(true),
         ),
     edit: (sub) =>
@@ -101,6 +158,15 @@ export const { command, execute, events } = createCommandGroup(
   {
     autocomplete: {
       info: {
+        id: autocompleteCourseId,
+      },
+      "add-instructor": {
+        id: autocompleteCourseId,
+      },
+      edit: {
+        id: autocompleteCourseId,
+      },
+      remove: {
         id: autocompleteCourseId,
       },
     },
@@ -154,8 +220,12 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
 async function addCommand(interaction: ChatInputCommandInteraction) {
   const id = interaction.options.getNumber("id", true)
   const module = interaction.options.getNumber("module", true)
-  const instructor1User = interaction.options.getUser("instructor1", true)
-  const instructor2User = interaction.options.getUser("instructor2", true)
+  const time = interaction.options.getString("time", true)
+  const datesString = interaction.options.getString("dates", true)
+  const timezone =
+    interaction.options.getString("timezone") ?? "America/New_York"
+  const instructor1User = interaction.options.getUser("instructor1")
+  const instructor2User = interaction.options.getUser("instructor2")
 
   // Check if course already exists
   const existingCourse = db.getCourse(id)
@@ -166,7 +236,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
     })
   }
 
-  const instructorUsers = [instructor1User, instructor2User]
+  const instructorUsers = [instructor1User, instructor2User].filter((x) => !!x)
   const instructorIds: number[] = []
   for (const user of instructorUsers) {
     // Check if instructor already exists
@@ -180,66 +250,129 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
     instructorIds.push(instructor.id)
   }
 
-  const response = await interaction.reply({
-    content:
-      `Please enter the dates for LIVE #${id} M${module}, one date per line, in the following format:\n\n` +
-      "`YYYY-MM-DD HH:MM` (e.g. `2025-07-06 20:00`)\n\n" +
-      "You can also use `cancel` to cancel the course creation. All dates should be in UTC.",
-    withResponse: true,
-  })
-  const messages = await (
-    response.resource!.message!.channel as TextChannel
-  ).awaitMessages({
-    filter: (m) => m.author.id === interaction.user.id,
-    max: 1,
-    time: 10 * 60 * 1000, // 10 minutes
-  })
-  if (messages.size === 0) {
-    return interaction.followUp({
-      content: "No dates provided. Course creation cancelled.",
-    })
-  }
-  const message = messages.first()!
-
-  // Check for cancellation
-  if (message.content.toLowerCase() === "cancel") {
-    await message.reply({
-      content: "Course creation cancelled.",
-    })
-    return
-  }
-
   // Process date input
-  const dates: Date[] = []
-  const lines = message.content.split("\n")
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue // Skip empty lines
+  const datesMidnight: DateTime[] = []
+  try {
+    datesMidnight.push(...parseDatesString(datesString))
+  } catch (error) {
+    return interaction.reply({
+      content: `Error parsing dates: ${(error as Error)?.message ?? "Unknown error"}`,
+      flags: "Ephemeral",
+    })
+  }
 
-    // Parse date
-    const [datePart, timePart] = trimmed.split(" ")
-    const dateTimeString = `${datePart}T${timePart}:00Z` // Append seconds and Z for UTC
-    const date = new Date(dateTimeString)
-    if (isNaN(date.getTime())) {
-      await message.delete()
-      return message.reply({
-        content: "Invalid date format. Please use `YYYY-MM-DD HH:MM`.",
-      })
-    }
-
-    dates.push(date)
+  // datesMidnight is UTC midnight of the given dates, make them the right time
+  const dates: DateTime[] = []
+  for (const date of datesMidnight) {
+    const [hours, minutes] = time.split(":").map(Number)
+    const newDate = date.setZone(timezone, { keepLocalTime: true }).set({
+      hour: hours,
+      minute: minutes,
+      second: 0,
+      millisecond: 0,
+    })
+    dates.push(newDate)
   }
 
   db.addCourse(id, module)
   db.addCourseInstructors(id, instructorIds)
   for (let i = 0; i < dates.length; i++) {
-    db.addCourseLesson(id, dates[i]!, lessonNames[i]!, lessonAbbreviations[i]!)
+    db.addCourseLesson(
+      id,
+      dates[i]!.toJSDate(),
+      lessonNames[i]!,
+      lessonAbbreviations[i]!,
+    )
   }
 
-  await interaction.followUp({
+  await interaction.reply({
     content: `Course LIVE #${id} M${module} created successfully with ${dates.length} date(s).`,
   })
   return
+}
+
+async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
+  const id = interaction.options.getNumber("id", true)
+  const instructorUser = interaction.options.getUser("instructor", true)
+
+  // Check if course exists
+  const course = db.getCourse(id)
+  if (!course) {
+    return interaction.reply({
+      content: `Course #${id} not found.`,
+      flags: "Ephemeral",
+    })
+  }
+
+  // Check if instructor already exists
+  const instructor = db.getInstructorByDiscordId(instructorUser.id)
+  if (!instructor) {
+    return interaction.reply({
+      content: `Instructor <@${instructorUser.id}> is not registered. Please register them first using the \`/instructor add\` command.`,
+      flags: "Ephemeral",
+      allowedMentions: { users: [] },
+    })
+  }
+
+  // Check if instructor is already added to the course
+  const existingInstructors = db.getCourseInstructors(id)
+  if (existingInstructors.some((i) => i.id === instructor.id)) {
+    return interaction.reply({
+      content: `Instructor <@${instructorUser.id}> is already added to course #${id}.`,
+      flags: "Ephemeral",
+      allowedMentions: { users: [] },
+    })
+  }
+
+  db.addCourseInstructors(id, [instructor.id])
+
+  return interaction.reply({
+    content: `Instructor <@${instructorUser.id}> has been added to course #${id} successfully.`,
+    allowedMentions: { users: [] },
+  })
+}
+
+async function removeInstructorCommand(
+  interaction: ChatInputCommandInteraction,
+) {
+  const id = interaction.options.getNumber("id", true)
+  const instructorUser = interaction.options.getUser("instructor", true)
+
+  // Check if course exists
+  const course = db.getCourse(id)
+  if (!course) {
+    return interaction.reply({
+      content: `Course #${id} not found.`,
+      flags: "Ephemeral",
+    })
+  }
+
+  // Check if instructor exists
+  const instructor = db.getInstructorByDiscordId(instructorUser.id)
+  if (!instructor) {
+    return interaction.reply({
+      content: `Instructor <@${instructorUser.id}> is not registered.`,
+      flags: "Ephemeral",
+      allowedMentions: { users: [] },
+    })
+  }
+
+  // Check if instructor is added to the course
+  const existingInstructors = db.getCourseInstructors(id)
+  if (!existingInstructors.some((i) => i.id === instructor.id)) {
+    return interaction.reply({
+      content: `Instructor <@${instructorUser.id}> is not teaching #${id}.`,
+      flags: "Ephemeral",
+      allowedMentions: { users: [] },
+    })
+  }
+
+  db.removeCourseInstructor(id, instructor.id)
+
+  return interaction.reply({
+    content: `Instructor <@${instructorUser.id}> has been removed from #${id} successfully.`,
+    allowedMentions: { users: [] },
+  })
 }
 
 async function editCommand(interaction: ChatInputCommandInteraction) {
