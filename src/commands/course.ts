@@ -1,11 +1,8 @@
 import {
-  ActionRowBuilder,
   AutocompleteInteraction,
   ChatInputCommandInteraction,
-  ComponentType,
+  EmbedBuilder,
   PermissionFlagsBits,
-  StringSelectMenuBuilder,
-  TextChannel,
 } from "discord.js"
 import type { DateTime } from "luxon"
 import { lessonAbbreviations, lessonNames, modules } from "../consts"
@@ -142,12 +139,6 @@ export const { command, execute, events } = createCommandGroup(
             .setDescription("Module number of the course")
             .setRequired(false)
             .setChoices(modules),
-        )
-        .addBooleanOption((option) =>
-          option
-            .setName("dates")
-            .setDescription("Whether to edit the course dates")
-            .setRequired(false),
         ),
     remove: (sub) =>
       sub
@@ -215,11 +206,14 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
       return `- ${lesson.name}, ${formatTimestamp(lesson.date)}, ${instructorMentions}`
     })
     .join("\n")
+  const content =
+    `Course LIVE #${id} (Module ${course.module})\n` +
+    `Instructors: ${instructors.map((i) => `<@${i.discord_id}>`).join(", ")}\n` +
+    `Scheduled dates:\n${scheduledDates}`
   await interaction.reply({
-    content:
-      `Course LIVE #${id} (Module ${course.module})\n` +
-      `Instructors: ${instructors.map((i) => `<@${i.discord_id}>`).join(", ")}\n` +
-      `Scheduled dates:\n${scheduledDates}`,
+    embeds: [
+      new EmbedBuilder().setTitle(`Course Info`).setDescription(content),
+    ],
     allowedMentions: { users: [] },
   })
 }
@@ -281,14 +275,23 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
     dates.push(newDate)
   }
 
+  const courseLessonNames =
+    dates.length === lessonNames.length
+      ? lessonNames
+      : dates.map((_, i) => `Lesson ${i + 1}`)
+  const courseLessonAbbreviations =
+    dates.length === lessonAbbreviations.length
+      ? lessonAbbreviations
+      : dates.map((_, i) => `L${i + 1}`)
+
   db.addCourse(id, module)
   db.addCourseInstructors(id, instructorIds)
   for (let i = 0; i < dates.length; i++) {
     db.addCourseLesson(
       id,
       dates[i]!.toJSDate(),
-      lessonNames[i]!,
-      lessonAbbreviations[i]!,
+      courseLessonNames[i]!,
+      courseLessonAbbreviations[i]!,
     )
   }
 
@@ -398,7 +401,6 @@ async function removeInstructorCommand(
 async function editCommand(interaction: ChatInputCommandInteraction) {
   const id = interaction.options.getNumber("id", true)
   const module = interaction.options.getNumber("module")
-  const editDates = interaction.options.getBoolean("dates") ?? false
 
   const course = db.getCourse(id)
   if (!course) {
@@ -411,118 +413,9 @@ async function editCommand(interaction: ChatInputCommandInteraction) {
   if (module) course.module = module
   db.updateCourse(course)
 
-  if (editDates) {
-    const userTimezone = db.getUserTimezone(interaction.user.id) ?? "UTC"
-    const lessons = db.getCourseLessons(id)
-    const response = await interaction.reply({
-      content: `Please select a lesson from LIVE #${id} below to edit.\n\n-# Times are in \`${userTimezone}\`; use /timezone to change it.`,
-      components: [
-        new ActionRowBuilder()
-          .addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId(`edit`)
-              .setPlaceholder("Select a lesson to edit")
-              .addOptions(
-                lessons.map((lesson) => ({
-                  label: lesson.date.toLocaleString("en-US", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                    timeZone: userTimezone,
-                  }),
-                  value: lesson.id.toString(),
-                })),
-              ),
-          )
-          .toJSON(),
-        new ActionRowBuilder()
-          .addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId(`delete`)
-              .setPlaceholder("Select a lesson to delete")
-              .addOptions(
-                lessons.map((lesson) => ({
-                  label: lesson.date.toLocaleString("en-US", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                    timeZone: userTimezone,
-                  }),
-                  value: lesson.id.toString(),
-                })),
-              ),
-          )
-          .toJSON(),
-      ],
-      withResponse: true,
-    })
-    const message = response.resource!.message!
-    let selectedLessonId: number
-    let action: "edit" | "delete"
-    try {
-      const result = await message.awaitMessageComponent({
-        componentType: ComponentType.StringSelect,
-        time: 10 * 60 * 1000,
-      }) // 10 minutes
-      await result.deferUpdate()
-      selectedLessonId = Number(result.values[0])
-      action = result.customId as "edit" | "delete"
-    } catch {
-      return interaction.editReply({
-        components: [],
-      })
-    }
-    const selectedLesson = lessons.find(
-      (lesson) => lesson.id === selectedLessonId,
-    )!
-    if (action === "edit") {
-      const response = await interaction.followUp({
-        content: `Please enter the new date for the lesson on ${formatTimestamp(selectedLesson.date)} (in UTC):\n\nUse \`cancel\` to cancel.`,
-        withResponse: true,
-      })
-      let newDate: Date | null = null
-      try {
-        const message = await (response.channel as TextChannel).awaitMessages({
-          filter: (m) => m.author.id === interaction.user.id,
-          max: 1,
-          time: 10 * 60 * 1000,
-          errors: ["time"],
-        })
-        const content = message.first()!.content.trim()
-        if (content === "cancel") {
-          return interaction.followUp("Canceled.")
-        }
-        // FIXME: Parse as UTC date like in /course add
-        const parsedDate = Date.parse(content)
-        if (!isNaN(parsedDate)) {
-          newDate = new Date(parsedDate)
-        }
-      } catch {
-        return interaction.followUp({
-          content: "No date provided in the given time. Please try again.",
-        })
-      }
-      if (!newDate) {
-        return interaction.followUp({
-          content: "Invalid date format. Please use `YYYY-MM-DD HH:MM`.",
-        })
-      }
-      // Update lesson date
-      selectedLesson.date = newDate
-      db.updateLesson(selectedLesson)
-      return interaction.followUp({
-        content: `Lesson has been updated successfully.`,
-      })
-    } else if (action === "delete") {
-      // Delete lesson
-      db.removeLesson(selectedLessonId)
-      return interaction.followUp({
-        content: `Lesson has been deleted successfully.`,
-      })
-    }
-  } else {
-    await interaction.reply({
-      content: `Course LIVE #${id} has been updated successfully.`,
-    })
-  }
+  await interaction.reply({
+    content: `Course LIVE #${id} has been updated successfully.`,
+  })
 }
 
 async function removeCommand(interaction: ChatInputCommandInteraction) {

@@ -18,6 +18,9 @@ class ConfigValue {
 class LiveDatabase {
   private database: Database
 
+  private cachedCourses: Map<number, Course> = new Map()
+  private cachedInstructors: Map<number, Instructor> = new Map()
+
   constructor(filename: string) {
     this.database = new Database(filename)
     this.database.exec("PRAGMA foreign_keys = ON")
@@ -63,6 +66,13 @@ class LiveDatabase {
     this.setConfigValue("sub_notify_channel_id", value)
   }
 
+  get filledSubChannelId(): string | null {
+    return this.fetchConfigValue("filled_sub_channel_id")
+  }
+  set filledSubChannelId(value: string | null) {
+    this.setConfigValue("filled_sub_channel_id", value)
+  }
+
   get adminRoleId(): string | null {
     return this.fetchConfigValue("admin_role_id")
   }
@@ -82,19 +92,18 @@ class LiveDatabase {
   }
   getInstructor(id: number): Instructor | null {
     return (
+      this.cachedInstructors.get(id) ??
       this.database
         .query("SELECT * FROM instructors WHERE id = ?")
         .as(Instructor)
-        .get(id) || null
+        .get(id)
     )
   }
   getInstructorByDiscordId(discordId: string): Instructor | null {
-    return (
-      this.database
-        .query("SELECT * FROM instructors WHERE discord_id = ?")
-        .as(Instructor)
-        .get(discordId) || null
-    )
+    return this.database
+      .query("SELECT * FROM instructors WHERE discord_id = ?")
+      .as(Instructor)
+      .get(discordId)
   }
   addInstructor(discordId: string, name: string): void {
     this.database
@@ -112,10 +121,11 @@ class LiveDatabase {
   }
   getCourse(id: number): Course | null {
     return (
+      this.cachedCourses.get(id) ??
       this.database
         .query("SELECT * FROM courses WHERE id = ?")
         .as(Course)
-        .get(id) || null
+        .get(id)
     )
   }
   addCourse(id: number, module: number): void {
@@ -198,12 +208,10 @@ class LiveDatabase {
       .all(courseId)
   }
   getLesson(lessonId: number): Lesson | null {
-    return (
-      this.database
-        .query("SELECT * FROM lessons WHERE id = ?")
-        .as(Lesson)
-        .get(lessonId) || null
-    )
+    return this.database
+      .query("SELECT * FROM lessons WHERE id = ?")
+      .as(Lesson)
+      .get(lessonId)
   }
   updateLesson(lesson: Lesson): void {
     this.database
@@ -292,12 +300,10 @@ class LiveDatabase {
       .all()
   }
   getSubRequest(id: number): SubRequest | null {
-    return (
-      this.database
-        .query("SELECT * FROM sub_requests WHERE id = ?")
-        .as(SubRequest)
-        .get(id) || null
-    )
+    return this.database
+      .query("SELECT * FROM sub_requests WHERE id = ?")
+      .as(SubRequest)
+      .get(id)
   }
   updateSubRequest(subRequest: SubRequest) {
     this.database
@@ -313,6 +319,28 @@ class LiveDatabase {
         subRequest.sent_notification,
         subRequest.id,
       )
+  }
+
+  getSubBotMessages(): string[] {
+    return this.database
+      .query("SELECT id AS value FROM sub_bot_messages")
+      .as(ConfigValue)
+      .all()
+      .map((row) => row.value)
+  }
+  addSubBotMessages(messageIds: string[]): void {
+    if (messageIds.length === 0) return
+    const placeholders = messageIds.map(() => "(?)").join(", ")
+    this.database
+      .query(`INSERT INTO sub_bot_messages (id) VALUES ${placeholders}`)
+      .run(...messageIds)
+  }
+  removeSubBotMessages(messageIds: string[]): void {
+    if (messageIds.length === 0) return
+    const placeholders = messageIds.map(() => "?").join(", ")
+    this.database
+      .query(`DELETE FROM sub_bot_messages WHERE id IN (${placeholders})`)
+      .run(...messageIds)
   }
 
   getAllIncompleteFutureLessons(): Lesson[] {
@@ -397,5 +425,8 @@ CREATE TABLE IF NOT EXISTS user_config (
   key TEXT NOT NULL,
   value TEXT NOT NULL,
   PRIMARY KEY (user_id, key)
-)
+);
+CREATE TABLE IF NOT EXISTS sub_bot_messages (
+  id TEXT PRIMARY KEY
+);
 `

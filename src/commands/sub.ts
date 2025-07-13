@@ -5,6 +5,9 @@ import {
   ButtonInteraction,
   ButtonStyle,
   Client,
+  EmbedBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   type ApplicationCommandOptionChoiceData,
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -36,7 +39,7 @@ export const { command, execute, events } = createCommand(
       lesson: lessonAutocomplete,
     },
     events: {
-      interactionCreate: handleAcceptSubButton,
+      interactionCreate: handleAcceptSubMenu,
       ready: onReady,
     },
   },
@@ -94,33 +97,12 @@ async function handler(interaction: ChatInputCommandInteraction) {
 
   await buttonInteraction.deferUpdate()
 
-  const subRequestId = db.addSubRequest(lessonId, instructor.id, reason)
+  db.addSubRequest(lessonId, instructor.id, reason)
+  updateSubRequestMessages(interaction.client) // Intentionally not awaited
 
-  const channelId = db.subChannelId
-  if (channelId) {
-    const channel = interaction.guild?.channels.cache.get(channelId)
-    if (channel && channel.isTextBased()) {
-      await channel.send({
-        content: `Sub request for lesson #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)} by <@${interaction.user.id}>${
-          reason ? `: ${reason}` : ""
-        }`,
-        components: [
-          new ActionRowBuilder()
-            .addComponents(
-              new ButtonBuilder()
-                .setStyle(ButtonStyle.Primary)
-                .setCustomId(`accept_sub_${subRequestId}`)
-                .setLabel("Take!")
-                .setEmoji("✅"),
-            )
-            .toJSON(),
-        ],
-      })
-    }
-  }
-
-  await buttonInteraction.followUp({
+  await buttonInteraction.editReply({
     content: "You have successfully asked for a sub.",
+    components: [],
   })
 }
 
@@ -135,6 +117,7 @@ async function lessonAutocomplete(
   const timezone = db.getUserTimezone(interaction.user.id) ?? "UTC"
   return lessons
     .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .filter((lesson) => lesson.date.getTime() > Date.now())
     .map((lesson) => ({
       name: `#${lesson.course_id} ${lesson.abbrev} - ${lesson.date.toLocaleDateString(
         "en-CA",
@@ -144,11 +127,11 @@ async function lessonAutocomplete(
     }))
 }
 
-async function handleAcceptSubButton(interaction: BaseInteraction) {
-  if (!interaction.isButton()) return
-  if (!interaction.customId.startsWith("accept_sub_")) return
+async function handleAcceptSubMenu(interaction: BaseInteraction) {
+  if (!interaction.isStringSelectMenu()) return
+  if (interaction.customId !== "accept_sub_menu") return
 
-  const subRequestId = parseInt(interaction.customId.split("_")[2]!)
+  const subRequestId = parseInt(interaction.values[0]!)
   const subRequest = db.getSubRequest(subRequestId)
   if (!subRequest) {
     return interaction.reply({
@@ -172,6 +155,36 @@ async function handleAcceptSubButton(interaction: BaseInteraction) {
   }
 
   const lessonId = subRequest.lesson_id
+  const lesson = db.getLesson(lessonId)!
+
+  const response = await interaction.reply({
+    content: `Are you sure you want to take the sub request for #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)}?`,
+    flags: "Ephemeral",
+    components: [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId("accept_sub_button")
+          .setLabel("Yes, take the sub request")
+          .setStyle(ButtonStyle.Primary),
+      ),
+    ],
+    withResponse: true,
+  })
+  const message = response.resource!.message!
+
+  let buttonInteraction: ButtonInteraction
+  try {
+    buttonInteraction = (await message.awaitMessageComponent({
+      filter: (i) => i.customId === "accept_sub_button",
+      time: 60_000,
+    })) as ButtonInteraction
+  } catch {
+    return interaction.editReply({
+      content: "You took too long to respond. Please try again.",
+      components: [],
+    })
+  }
+
   db.removeLessonInstructor(lessonId, subRequest.instructor_id)
   db.addLessonInstructor(lessonId, instructor.id, {
     isSub: true,
@@ -180,14 +193,10 @@ async function handleAcceptSubButton(interaction: BaseInteraction) {
   subRequest.is_open = 0
   db.updateSubRequest(subRequest)
 
-  await interaction.reply({
+  updateSubRequestMessages(interaction.client) // Intentionally not awaited
+
+  await buttonInteraction.update({
     content: `You have taken the sub request for this lesson.`,
-    flags: "Ephemeral",
-  })
-  await interaction.message.edit({
-    content:
-      `${interaction.message.content}\n\n` +
-      `<@${interaction.user.id}> has taken this sub request.`,
     components: [],
   })
 }
@@ -258,4 +267,106 @@ async function onReady(client: Client<true>) {
   console.log("Checking for open sub requests...")
   await checkSubRequests(client)
   console.log("Setting up interval to check for sub requests every minute...")
+}
+
+let isUpdatingSubRequests = false
+let shouldReupdateSubRequests = false
+
+export async function updateSubRequestMessages(client: Client<true>) {
+  if (isUpdatingSubRequests) {
+    shouldReupdateSubRequests = true
+    return
+  }
+  isUpdatingSubRequests = true
+  try {
+    const subChannelId = db.subChannelId
+    if (!subChannelId) return
+    const subChannel = client.channels.cache.get(subChannelId)
+    if (!subChannel || !subChannel.isSendable() || subChannel.isDMBased())
+      return
+
+    const existingSubMessageIds = db.getSubBotMessages()
+    const deleted = await subChannel.bulkDelete(existingSubMessageIds)
+    const toDelete = existingSubMessageIds.filter((id) => !deleted.has(id))
+    for (const id of toDelete) {
+      subChannel.messages.delete(id) // Intentionally not awaited
+    }
+    db.removeSubBotMessages(existingSubMessageIds)
+
+    const contentLines: { content: string; label: string; id: number }[] = []
+    const subRequests = db.getOpenSubRequests()
+    for (const subRequest of subRequests) {
+      const lesson = db.getLesson(subRequest.lesson_id)!
+      const course = db.getCourse(lesson.course_id)!
+      const instructor = db.getInstructor(subRequest.instructor_id)!
+
+      const content = `${formatTimestamp(lesson.date)}, Live ${lesson.course_id}, M${course.module}${lesson.abbrev} (sub for <@${instructor.discord_id}>${subRequest.reason ? `: ${subRequest.reason}` : ""})`
+      const label = `#${lesson.course_id} M${course.module}${lesson.abbrev}`
+
+      contentLines.push({ content, label, id: subRequest.id })
+    }
+
+    if (contentLines.length === 0) {
+      const message = await subChannel.send({
+        content: "There are currently no open sub requests.",
+      })
+      db.addSubBotMessages([message.id])
+      return
+    }
+
+    let currentContent: string = ""
+    const currentOptions: StringSelectMenuOptionBuilder[] = []
+
+    const sendCurrentContent = async () => {
+      if (currentContent.length === 0) return
+      const selectMenus: StringSelectMenuBuilder[] = []
+      // 25 options per menu
+      for (let i = 0; i < currentOptions.length; i += 25) {
+        const options = currentOptions.slice(i, i + 25)
+        selectMenus.push(
+          new StringSelectMenuBuilder()
+            .setCustomId("accept_sub_menu")
+            .setPlaceholder(
+              `Accept a sub request (Part ${Math.floor(i / 25) + 1})`,
+            )
+            .addOptions(options),
+        )
+      }
+      const message = await subChannel.send({
+        // content: currentContent.trim(),
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("Open Sub Requests")
+            .setDescription(currentContent.trim()),
+        ],
+        components: selectMenus.map((menu) =>
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu),
+        ),
+        allowedMentions: { users: [] },
+      })
+      db.addSubBotMessages([message.id])
+      currentContent = ""
+      currentOptions.length = 0
+    }
+
+    for (const { content, label, id } of contentLines) {
+      if (
+        currentOptions.length >= 75 ||
+        currentContent.length + content.length > 4096
+      ) {
+        await sendCurrentContent()
+      }
+      currentContent += content + "\n\n"
+      currentOptions.push(
+        new StringSelectMenuOptionBuilder().setLabel(label).setValue(`${id}`),
+      )
+    }
+    await sendCurrentContent()
+  } finally {
+    isUpdatingSubRequests = false
+    if (shouldReupdateSubRequests) {
+      shouldReupdateSubRequests = false
+      updateSubRequestMessages(client) // Intentionally not awaited
+    }
+  }
 }
