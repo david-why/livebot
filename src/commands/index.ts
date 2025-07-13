@@ -25,6 +25,7 @@ import * as course from "./course"
 import * as instructor from "./instructor"
 import * as timezone from "./timezone"
 import * as sub from "./sub"
+import * as lesson from "./lesson"
 
 const commands = new Collection<
   string,
@@ -40,6 +41,7 @@ register(commands, course)
 register(commands, instructor)
 register(commands, timezone)
 register(commands, sub)
+register(commands, lesson)
 
 export default commands
 

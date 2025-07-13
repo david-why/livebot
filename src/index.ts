@@ -8,19 +8,29 @@ const client = new Client({
   intents: 131071, // All intents
 })
 
-client.once("ready", async () => {
-  console.log(`Logged in as ${client.user?.tag}!`)
-  for (const command of commands.values()) {
-    if (command.events) {
-      for (const [event, handler] of Object.entries(command.events)) {
-        client.on(event, handler)
-      }
+for (const command of commands.values()) {
+  if (command.events) {
+    for (const [event, handler] of Object.entries(command.events)) {
+      client.on(event, handler)
     }
   }
+}
+
+client.once("ready", async () => {
+  console.log(`Logged in as ${client.user?.tag}!`)
+})
+
+client.on("debug", (info) => {
+  console.debug(info)
+})
+
+client.on("warn", (info) => {
+  console.warn(info)
 })
 
 client.on("error", (error) => {
-  console.error(error)
+  console.error(error.message)
+  console.error(error.stack)
 })
 
 client.on("interactionCreate", async (interaction) => {

@@ -28,6 +28,13 @@ export function formatOptions(options: readonly CommandInteractionOption[]) {
     .join(", ")
 }
 
-export function formatTimestamp(date: Date, format: string = 'F'): string {
+export function formatTimestamp(date: Date, format: string = "F"): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:${format}>`
+}
+
+export function formatInstructorFlags(flags: number) {
+  const flagsList: string[] = []
+  if (flags & 1) flagsList.push("Sub")
+  if (flags & 2) flagsList.push("Free-Will")
+  return flagsList.length > 0 ? ` (${flagsList.join(", ")})` : ""
 }

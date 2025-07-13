@@ -12,7 +12,7 @@ import { lessonAbbreviations, lessonNames, modules } from "../consts"
 import { db } from "../database"
 import { parseDatesString } from "../utils/dates"
 import { createCommandGroup } from "../utils/discordjs"
-import { formatTimestamp } from "../utils/format"
+import { formatInstructorFlags, formatTimestamp } from "../utils/format"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
@@ -100,6 +100,13 @@ export const { command, execute, events } = createCommandGroup(
             .setName("instructor")
             .setDescription("The instructor to add to the course")
             .setRequired(true),
+        )
+        .addBooleanOption((option) =>
+          option
+            .setName("lessons")
+            .setDescription(
+              "Whether to add the instructor to all lessons of the course",
+            ),
         ),
     "remove-instructor": (sub) =>
       sub
@@ -203,9 +210,9 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
     .map((lesson) => {
       const instructors = db.getLessonInstructors(lesson.id)
       const instructorMentions = instructors
-        .map((i) => `<@${i.discord_id}>`)
+        .map((i) => `<@${i.discord_id}>${formatInstructorFlags(i.flags)}`)
         .join(" & ")
-      return `- ${lesson.name}, ${instructorMentions} (${formatTimestamp(lesson.date)})`
+      return `- ${lesson.name}, ${formatTimestamp(lesson.date)}, ${instructorMentions}`
     })
     .join("\n")
   await interaction.reply({
@@ -294,6 +301,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
 async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
   const id = interaction.options.getNumber("id", true)
   const instructorUser = interaction.options.getUser("instructor", true)
+  const addToAllLessons = interaction.options.getBoolean("lessons") ?? false
 
   // Check if course exists
   const course = db.getCourse(id)
@@ -325,6 +333,18 @@ async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
   }
 
   db.addCourseInstructors(id, [instructor.id])
+
+  if (addToAllLessons) {
+    const lessons = db.getCourseLessons(id)
+    for (const lesson of lessons) {
+      db.addLessonInstructor(lesson.id, instructor.id)
+    }
+    await interaction.reply({
+      content: `Instructor <@${instructorUser.id}> has been added to all lessons of course #${id} successfully.`,
+      allowedMentions: { users: [] },
+    })
+    return
+  }
 
   return interaction.reply({
     content: `Instructor <@${instructorUser.id}> has been added to course #${id} successfully.`,

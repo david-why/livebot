@@ -37,11 +37,22 @@ export const command = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("admin-role")
-      .setDescription("Set the admin role for the bot")
+      .setDescription("Set the admin role")
       .addRoleOption((option) =>
         option
           .setName("role")
           .setDescription("The role to set as admin")
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("teaching-role")
+      .setDescription("Set the teaching role")
+      .addRoleOption((option) =>
+        option
+          .setName("role")
+          .setDescription("The role to set as @Teaching")
           .setRequired(true),
       ),
   )
@@ -54,6 +65,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     | "sub-channel"
     | "sub-notify-channel"
     | "admin-role"
+    | "teaching-role"
     | "get"
   if (subcommand == "sub-channel") {
     db.subChannelId = interaction.options.getChannel("channel", true).id
@@ -71,18 +83,28 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       content: `Admin role set to <@&${db.adminRoleId}>.`,
       allowedMentions: { roles: [] },
     })
+  } else if (subcommand == "teaching-role") {
+    db.teachingRoleId = interaction.options.getRole("role", true).id
+    await interaction.reply({
+      content: `Teaching role set to <@&${db.teachingRoleId}>.`,
+      allowedMentions: { roles: [] },
+    })
   } else if (subcommand == "get") {
     const subChannel = db.subChannelId ? `<#${db.subChannelId}>` : "not set"
     const subNotifyChannel = db.subNotifyChannelId
       ? `<#${db.subNotifyChannelId}>`
       : "not set"
     const adminRole = db.adminRoleId ? `<@&${db.adminRoleId}>` : "not set"
+    const teachingRole = db.teachingRoleId
+      ? `<@&${db.teachingRoleId}>`
+      : "not set"
     await interaction.reply({
       content:
         `Current configuration:\n` +
         `- Sub channel: ${subChannel}\n` +
         `- Sub notify channel: ${subNotifyChannel}\n` +
-        `- Admin role: ${adminRole}`,
+        `- Admin role: ${adminRole}\n` +
+        `- Teaching role: ${teachingRole}`,
       allowedMentions: { roles: [] },
     })
   }

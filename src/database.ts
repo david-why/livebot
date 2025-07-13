@@ -6,6 +6,11 @@ import { SubRequest } from "./models/sub_request"
 
 const { DB_FILENAME = "data.db" } = process.env
 
+interface AddLessonInstructorOptions {
+  isSub?: boolean
+  isFreeWill?: boolean
+}
+
 class ConfigValue {
   constructor(public value: string) {}
 }
@@ -63,6 +68,13 @@ class LiveDatabase {
   }
   set adminRoleId(value: string | null) {
     this.setConfigValue("admin_role_id", value)
+  }
+
+  get teachingRoleId(): string | null {
+    return this.fetchConfigValue("teaching_role_id")
+  }
+  set teachingRoleId(value: string | null) {
+    this.setConfigValue("teaching_role_id", value)
   }
 
   getAllInstructors(): Instructor[] {
@@ -167,14 +179,14 @@ class LiveDatabase {
     const lessonId = changes.lastInsertRowid
     const instructors = this.getCourseInstructors(courseId)
     if (instructors.length > 0) {
-      const placeholders = instructors.map(() => "(?, ?, 0)").join(", ")
+      const placeholders = instructors.map(() => "(?, ?)").join(", ")
       const values = instructors.flatMap((instructor) => [
         lessonId,
         instructor.id,
       ])
       this.database
         .query(
-          `INSERT INTO lesson_instructors (lesson_id, instructor_id, is_sub) VALUES ${placeholders}`,
+          `INSERT INTO lesson_instructors (lesson_id, instructor_id) VALUES ${placeholders}`,
         )
         .run(...values)
     }
@@ -200,17 +212,17 @@ class LiveDatabase {
       )
       .run(lesson.date.getTime(), lesson.name, lesson.abbrev, lesson.id)
   }
-  getLessonInstructors(lessonId: number): Instructor[] {
+  getLessonInstructors(lessonId: number): (Instructor & { flags: number })[] {
     return this.database
       .query(
-        `SELECT i.* FROM lesson_instructors li
+        `SELECT li.flags, i.* FROM lesson_instructors li
          JOIN instructors i ON li.instructor_id = i.id
          WHERE li.lesson_id = ?`,
       )
       .as(Instructor)
-      .all(lessonId)
+      .all(lessonId) as (Instructor & { flags: number })[]
   }
-  deleteLessonInstructor(lessonId: number, instructorId: number): void {
+  removeLessonInstructor(lessonId: number, instructorId: number): void {
     this.database
       .query(
         "DELETE FROM lesson_instructors WHERE lesson_id = ? AND instructor_id = ?",
@@ -220,13 +232,14 @@ class LiveDatabase {
   addLessonInstructor(
     lessonId: number,
     instructorId: number,
-    isSub: boolean = false,
+    options: AddLessonInstructorOptions = {},
   ): void {
+    const { isSub = false, isFreeWill = false } = options
     this.database
       .query(
-        "INSERT INTO lesson_instructors (lesson_id, instructor_id, is_sub) VALUES (?, ?, ?)",
+        "INSERT INTO lesson_instructors (lesson_id, instructor_id, flags) VALUES (?, ?, ?)",
       )
-      .run(lessonId, instructorId, isSub ? 1 : 0)
+      .run(lessonId, instructorId, (isSub ? 1 : 0) | (isFreeWill ? 2 : 0))
   }
   removeLesson(lessonId: number): void {
     this.database.query("DELETE FROM lessons WHERE id = ?").run(lessonId)
@@ -297,9 +310,28 @@ class LiveDatabase {
         subRequest.is_open,
         subRequest.opened_at,
         subRequest.reason,
-        subRequest.id,
         subRequest.sent_notification,
+        subRequest.id,
       )
+  }
+
+  getAllIncompleteFutureLessons(): Lesson[] {
+    // less than 2 instructors
+    return this.database
+      .query(
+        `SELECT * FROM lessons l
+         WHERE l.date_timestamp > ? AND (
+           SELECT COUNT(*) FROM lesson_instructors li2 WHERE li2.lesson_id = l.id
+         ) < 2`,
+      )
+      .as(Lesson)
+      .all(Date.now())
+  }
+  getAllFutureLessons(): Lesson[] {
+    return this.database
+      .query(`SELECT * FROM lessons l WHERE l.date_timestamp > ?`)
+      .as(Lesson)
+      .all(Date.now())
   }
 }
 
@@ -330,10 +362,14 @@ CREATE TABLE IF NOT EXISTS lessons (
   abbrev TEXT NOT NULL,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_lessons_date_timestamp ON lessons (date_timestamp);
 CREATE TABLE IF NOT EXISTS lesson_instructors (
   lesson_id INTEGER NOT NULL,
   instructor_id INTEGER NOT NULL,
-  is_sub INTEGER NOT NULL DEFAULT 0,
+  flags INTEGER NOT NULL DEFAULT 0,
+  -- is_sub INTEGER NOT NULL DEFAULT 0, -- This is not used anymore, use flags instead
+  -- 1 = is sub
+  -- 2 = is free-will
   FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
   FOREIGN KEY (instructor_id) REFERENCES instructors(id),
   PRIMARY KEY (lesson_id, instructor_id)
