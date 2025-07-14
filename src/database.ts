@@ -308,7 +308,7 @@ class LiveDatabase {
   updateSubRequest(subRequest: SubRequest) {
     this.database
       .query(
-        "UPDATE sub_requests SET lesson_id = ?, instructor_id = ?, is_open = ?, opened_at = ?, reason = ?, sent_notification = ? WHERE id = ?",
+        "UPDATE sub_requests SET lesson_id = ?, instructor_id = ?, is_open = ?, opened_at = ?, reason = ?, sent_notification = ?, filled_by = ?, filled_at = ? WHERE id = ?",
       )
       .run(
         subRequest.lesson_id,
@@ -317,6 +317,8 @@ class LiveDatabase {
         subRequest.opened_at,
         subRequest.reason,
         subRequest.sent_notification,
+        subRequest.filled_by,
+        subRequest.filled_at,
         subRequest.id,
       )
   }
@@ -408,10 +410,13 @@ CREATE TABLE IF NOT EXISTS sub_requests (
   instructor_id INTEGER NOT NULL,
   is_open INTEGER NOT NULL DEFAULT 1,
   opened_at REAL NOT NULL,
+  filled_by INTEGER,
+  filled_at REAL,
   reason TEXT,
   sent_notification INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-  FOREIGN KEY (instructor_id) REFERENCES instructors(id)
+  FOREIGN KEY (instructor_id) REFERENCES instructors(id),
+  FOREIGN KEY (filled_by) REFERENCES instructors(id)
 );
 CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY,

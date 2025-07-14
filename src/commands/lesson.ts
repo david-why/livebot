@@ -153,7 +153,7 @@ async function autocompleteLessons(interaction: AutocompleteInteraction) {
     name: `#${lesson.course_id} ${lesson.abbrev} - ${lesson.date.toLocaleString(
       "en-CA",
       { timeZone: timezone },
-    )}${timezone === "UTC" ? " (UTC)" : ""}`,
+    )} (${timezone})`,
     value: lesson.id,
   }))
 

@@ -15,6 +15,7 @@ import {
 import { createCommand } from "../utils/discordjs"
 import { db } from "../database"
 import { formatTimestamp } from "../utils/format"
+import type { SubRequest } from "../models/sub_request"
 
 export const { command, execute, events } = createCommand(
   (command) =>
@@ -122,7 +123,7 @@ async function lessonAutocomplete(
       name: `#${lesson.course_id} ${lesson.abbrev} - ${lesson.date.toLocaleDateString(
         "en-CA",
         { timeZone: timezone },
-      )}${timezone === "UTC" ? " (UTC)" : ""}`,
+      )} (${timezone})`,
       value: lesson.id,
     }))
 }
@@ -191,9 +192,12 @@ async function handleAcceptSubMenu(interaction: BaseInteraction) {
     isFreeWill: true,
   })
   subRequest.is_open = 0
+  subRequest.filled_by = instructor.id
+  subRequest.filledDate = new Date()
   db.updateSubRequest(subRequest)
 
   updateSubRequestMessages(interaction.client) // Intentionally not awaited
+  sendSubRequestTakenMessage(interaction.client, subRequest)
 
   await buttonInteraction.update({
     content: `You have taken the sub request for this lesson.`,
@@ -289,7 +293,7 @@ export async function updateSubRequestMessages(client: Client<true>) {
     const deleted = await subChannel.bulkDelete(existingSubMessageIds)
     const toDelete = existingSubMessageIds.filter((id) => !deleted.has(id))
     for (const id of toDelete) {
-      subChannel.messages.delete(id) // Intentionally not awaited
+      subChannel.messages.delete(id).catch(() => {}) // Intentionally not awaited
     }
     db.removeSubBotMessages(existingSubMessageIds)
 
@@ -326,9 +330,7 @@ export async function updateSubRequestMessages(client: Client<true>) {
         selectMenus.push(
           new StringSelectMenuBuilder()
             .setCustomId("accept_sub_menu")
-            .setPlaceholder(
-              `Accept a sub request (Part ${Math.floor(i / 25) + 1})`,
-            )
+            .setPlaceholder(`Accept a sub request`)
             .addOptions(options),
         )
       }
@@ -369,4 +371,27 @@ export async function updateSubRequestMessages(client: Client<true>) {
       updateSubRequestMessages(client) // Intentionally not awaited
     }
   }
+}
+
+export function sendSubRequestTakenMessage(
+  client: Client<true>,
+  subRequest: SubRequest,
+  isFreeWill: boolean = true,
+) {
+  const channelId = db.filledSubChannelId
+  if (!channelId) return
+  const channel = client.channels.cache.get(channelId)
+  if (!channel || !channel.isSendable() || channel.isDMBased()) return
+
+  const lesson = db.getLesson(subRequest.lesson_id)!
+  const course = db.getCourse(lesson.course_id)!
+  const instructor = db.getInstructor(subRequest.instructor_id)!
+  const filledInstructor = db.getInstructor(subRequest.filled_by!)!
+
+  const content = `~~${formatTimestamp(lesson.date)}, Live ${lesson.course_id}, M${course.module}${lesson.abbrev} (sub for <@${instructor.discord_id}>${subRequest.reason ? `: ${subRequest.reason}` : ""})~~ <@${filledInstructor.discord_id}>${isFreeWill ? " ★" : ""}`
+
+  return channel.send({
+    content,
+    allowedMentions: { users: [filledInstructor.discord_id] },
+  })
 }

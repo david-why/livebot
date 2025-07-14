@@ -36,6 +36,18 @@ export const command = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub
+      .setName("filled-sub-channel")
+      .setDescription("Set the channel for posting filled sub requests")
+      .addChannelOption((option) =>
+        option
+          .setName("channel")
+          .setDescription("The channel to set")
+          .setRequired(true)
+          .addChannelTypes(ChannelType.GuildText),
+      ),
+  )
+  .addSubcommand((sub) =>
+    sub
       .setName("admin-role")
       .setDescription("Set the admin role")
       .addRoleOption((option) =>
@@ -64,18 +76,24 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const subcommand = interaction.options.getSubcommand(true) as
     | "sub-channel"
     | "sub-notify-channel"
+    | "filled-sub-channel"
     | "admin-role"
     | "teaching-role"
     | "get"
   if (subcommand == "sub-channel") {
     db.subChannelId = interaction.options.getChannel("channel", true).id
     await interaction.reply({
-      content: `Sub channel set to <#${db.subChannelId}>`,
+      content: `Sub channel set to <#${db.subChannelId}>.`,
     })
   } else if (subcommand == "sub-notify-channel") {
     db.subNotifyChannelId = interaction.options.getChannel("channel", true).id
     await interaction.reply({
-      content: `Sub notify channel set to <#${db.subNotifyChannelId}>`,
+      content: `Sub notify channel set to <#${db.subNotifyChannelId}>.`,
+    })
+  } else if (subcommand == "filled-sub-channel") {
+    db.filledSubChannelId = interaction.options.getChannel("channel", true).id
+    await interaction.reply({
+      content: `Filled sub channel set to <#${db.filledSubChannelId}>.`,
     })
   } else if (subcommand == "admin-role") {
     db.adminRoleId = interaction.options.getRole("role", true).id
@@ -94,6 +112,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const subNotifyChannel = db.subNotifyChannelId
       ? `<#${db.subNotifyChannelId}>`
       : "not set"
+    const filledSubChannel = db.filledSubChannelId
+      ? `<#${db.filledSubChannelId}>`
+      : "not set"
     const adminRole = db.adminRoleId ? `<@&${db.adminRoleId}>` : "not set"
     const teachingRole = db.teachingRoleId
       ? `<@&${db.teachingRoleId}>`
@@ -103,6 +124,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         `Current configuration:\n` +
         `- Sub channel: ${subChannel}\n` +
         `- Sub notify channel: ${subNotifyChannel}\n` +
+        `- Filled sub channel: ${filledSubChannel}\n` +
         `- Admin role: ${adminRole}\n` +
         `- Teaching role: ${teachingRole}`,
       allowedMentions: { roles: [] },

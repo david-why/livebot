@@ -19,7 +19,7 @@ export const { command, execute, events } = createCommandGroup(
 async function refreshSubRequestsCommand(
   interaction: ChatInputCommandInteraction,
 ) {
-  await interaction.deferReply({ ephemeral: true })
+  await interaction.deferReply({ flags: "Ephemeral" })
   await updateSubRequestMessages(interaction.client)
   await interaction.editReply("Sub requests refreshed successfully.")
 }
