@@ -7,6 +7,9 @@ export class Lesson {
     date: Date,
     public name: string,
     public abbrev: string,
+    public description: string,
+    public google_event_id: string | null,
+    public google_event_outdated: number,
   ) {
     this.date_timestamp = date.getTime()
   }

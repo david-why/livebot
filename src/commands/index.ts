@@ -20,6 +20,7 @@ function register<T extends { command: { name: string } }>(
   commands.set(command.command.name, command)
 }
 
+import * as calendar from "./admin/calendar"
 import * as config from "./admin/config"
 import * as course from "./admin/course"
 import * as debug from "./admin/debug"
@@ -38,6 +39,7 @@ const commands = new Collection<
   }
 >()
 
+register(commands, calendar)
 register(commands, config)
 register(commands, course)
 register(commands, debug)
@@ -49,8 +51,6 @@ register(commands, timezone)
 
 export default commands
 
-import * as addInstructor from "./context/add_instructor"
-
 export const contextCommands = new Collection<
   string,
   {
@@ -59,5 +59,3 @@ export const contextCommands = new Collection<
     events?: Partial<ClientEventHandlers>
   }
 >()
-
-register(contextCommands, addInstructor)

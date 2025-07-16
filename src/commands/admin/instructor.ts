@@ -16,6 +16,12 @@ export const command = new SlashCommandBuilder()
           .setName("user")
           .setDescription("The user to add as an instructor")
           .setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName("email")
+          .setDescription("The email of the instructor")
+          .setRequired(true),
       ),
   )
   .addSubcommand((sub) =>
@@ -69,8 +75,9 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
     })
   } else if (subcommand === "add") {
     const user = interaction.options.getUser("user", true)
+    const email = interaction.options.getString("email", true)
     const name = user.displayName
-    db.addInstructor(user.id, name)
+    db.addInstructor(user.id, name, email)
     await interaction.reply({
       content: `Instructor ${name} (<@${user.id}>) has been added.`,
       allowedMentions: { users: [] },

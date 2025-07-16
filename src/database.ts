@@ -52,6 +52,13 @@ class LiveDatabase {
     }
   }
 
+  get googleCalendarCredentials(): string | null {
+    return this.fetchConfigValue("google_calendar_credentials")
+  }
+  set googleCalendarCredentials(value: string | null) {
+    this.setConfigValue("google_calendar_credentials", value)
+  }
+
   get subChannelId(): string | null {
     return this.fetchConfigValue("sub_channel_id")
   }
@@ -105,15 +112,24 @@ class LiveDatabase {
       .as(Instructor)
       .get(discordId)
   }
-  addInstructor(discordId: string, name: string): void {
+  addInstructor(discordId: string, name: string, email: string): void {
     this.database
-      .query("INSERT INTO instructors (discord_id, name) VALUES (?, ?)")
-      .run(discordId, name)
+      .query(
+        "INSERT INTO instructors (discord_id, name, email) VALUES (?, ?, ?)",
+      )
+      .run(discordId, name, email)
   }
   updateInstructor(instructor: Instructor): void {
     this.database
-      .query("UPDATE instructors SET name = ? WHERE discord_id = ?")
-      .run(instructor.name, instructor.discord_id)
+      .query(
+        "UPDATE instructors SET discord_id = ?, name = ?, email = ? WHERE id = ?",
+      )
+      .run(
+        instructor.discord_id,
+        instructor.name,
+        instructor.email,
+        instructor.id,
+      )
   }
 
   getAllCourses(): Course[] {
@@ -128,11 +144,11 @@ class LiveDatabase {
         .get(id)
     )
   }
-  addCourse(id: number, module: number): void {
+  addCourse(id: number, module: number, duration: number): void {
     // Insert new course
     this.database
-      .query("INSERT INTO courses (id, module) VALUES (?, ?)")
-      .run(id, module)
+      .query("INSERT INTO courses (id, module, duration) VALUES (?, ?, ?)")
+      .run(id, module, duration)
   }
   updateCourse(course: Course): void {
     this.database
@@ -179,12 +195,13 @@ class LiveDatabase {
     date: Date,
     name: string,
     abbrev: string,
+    description: string = "",
   ): void {
     const changes = this.database
       .query(
-        "INSERT INTO lessons (course_id, date_timestamp, name, abbrev) VALUES (?, ?, ?, ?)",
+        "INSERT INTO lessons (course_id, date_timestamp, name, abbrev, description) VALUES (?, ?, ?, ?, ?)",
       )
-      .run(courseId, date.getTime(), name, abbrev)
+      .run(courseId, date.getTime(), name, abbrev, description)
     // add instructors same as the course
     const lessonId = changes.lastInsertRowid
     const instructors = this.getCourseInstructors(courseId)
@@ -207,6 +224,12 @@ class LiveDatabase {
       .as(Lesson)
       .all(courseId)
   }
+  getAllCalendarOutdatedLessons(): Lesson[] {
+    return this.database
+      .query("SELECT * FROM lessons WHERE google_event_outdated = 1")
+      .as(Lesson)
+      .all()
+  }
   getLesson(lessonId: number): Lesson | null {
     return this.database
       .query("SELECT * FROM lessons WHERE id = ?")
@@ -216,9 +239,17 @@ class LiveDatabase {
   updateLesson(lesson: Lesson): void {
     this.database
       .query(
-        "UPDATE lessons SET date_timestamp = ?, name = ?, abbrev = ? WHERE id = ?",
+        "UPDATE lessons SET date_timestamp = ?, name = ?, abbrev = ?, google_event_id = ?, google_event_outdated = ?, description = ? WHERE id = ?",
       )
-      .run(lesson.date.getTime(), lesson.name, lesson.abbrev, lesson.id)
+      .run(
+        lesson.date.getTime(),
+        lesson.name,
+        lesson.abbrev,
+        lesson.google_event_id,
+        lesson.google_event_outdated,
+        lesson.description,
+        lesson.id,
+      )
   }
   getLessonInstructors(lessonId: number): (Instructor & { flags: number })[] {
     return this.database
@@ -236,6 +267,9 @@ class LiveDatabase {
         "DELETE FROM lesson_instructors WHERE lesson_id = ? AND instructor_id = ?",
       )
       .run(lessonId, instructorId)
+    this.database
+      .query("UPDATE lessons SET google_event_outdated = 1 WHERE id = ?")
+      .run(lessonId)
   }
   addLessonInstructor(
     lessonId: number,
@@ -248,6 +282,9 @@ class LiveDatabase {
         "INSERT INTO lesson_instructors (lesson_id, instructor_id, flags) VALUES (?, ?, ?)",
       )
       .run(lessonId, instructorId, (isSub ? 1 : 0) | (isFreeWill ? 2 : 0))
+    this.database
+      .query("UPDATE lessons SET google_event_outdated = 1 WHERE id = ?")
+      .run(lessonId)
   }
   removeLesson(lessonId: number): void {
     this.database.query("DELETE FROM lessons WHERE id = ?").run(lessonId)
@@ -371,11 +408,13 @@ const INIT_SQL = `
 CREATE TABLE IF NOT EXISTS instructors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   discord_id TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS courses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  module INTEGER NOT NULL
+  module INTEGER NOT NULL,
+  duration INTEGER NOT NULL  -- in minutes
 );
 CREATE TABLE IF NOT EXISTS course_instructors (
   course_id INTEGER NOT NULL,
@@ -390,6 +429,9 @@ CREATE TABLE IF NOT EXISTS lessons (
   date_timestamp REAL NOT NULL,
   name TEXT NOT NULL,
   abbrev TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  google_event_id TEXT,
+  google_event_outdated INTEGER NOT NULL DEFAULT 1,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_lessons_date_timestamp ON lessons (date_timestamp);

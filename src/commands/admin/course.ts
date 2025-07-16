@@ -10,6 +10,7 @@ import { db } from "../../database"
 import { parseDatesString } from "../../utils/dates"
 import { createCommandGroup } from "../../utils/discordjs"
 import { formatInstructorFlags, formatTimestamp } from "../../utils/format"
+import { deleteCalendarEvent } from "../../services/calendar"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
@@ -62,6 +63,12 @@ export const { command, execute, events } = createCommandGroup(
             .setDescription(
               "The dates of the course in the weird template format",
             )
+            .setRequired(true),
+        )
+        .addNumberOption((option) =>
+          option
+            .setName("duration")
+            .setDescription("Duration of the course in minutes")
             .setRequired(true),
         )
         .addUserOption((option) =>
@@ -223,6 +230,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
   const module = interaction.options.getNumber("module", true)
   const time = interaction.options.getString("time", true)
   const datesString = interaction.options.getString("dates", true)
+  const duration = interaction.options.getNumber("duration", true)
   const timezone =
     interaction.options.getString("timezone") ?? "America/New_York"
   const instructor1User = interaction.options.getUser("instructor1")
@@ -284,7 +292,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
       ? lessonAbbreviations
       : dates.map((_, i) => `L${i + 1}`)
 
-  db.addCourse(id, module)
+  db.addCourse(id, module, duration)
   db.addCourseInstructors(id, instructorIds)
   for (let i = 0; i < dates.length; i++) {
     db.addCourseLesson(
@@ -428,10 +436,16 @@ async function removeCommand(interaction: ChatInputCommandInteraction) {
       flags: "Ephemeral",
     })
   }
+  await interaction.deferReply()
+  
+  const lessons = db.getCourseLessons(id)
+  for (const lesson of lessons) {
+    await deleteCalendarEvent(lesson.id)
+  }
 
   db.removeCourse(id)
 
-  await interaction.reply({
+  await interaction.editReply({
     content: `Course LIVE #${id} has been removed successfully.`,
   })
 }
