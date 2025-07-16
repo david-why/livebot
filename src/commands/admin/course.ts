@@ -5,25 +5,25 @@ import {
   PermissionFlagsBits,
 } from "discord.js"
 import type { DateTime } from "luxon"
-import { lessonAbbreviations, lessonNames, modules } from "../consts"
-import { db } from "../database"
-import { parseDatesString } from "../utils/dates"
-import { createCommandGroup } from "../utils/discordjs"
-import { formatInstructorFlags, formatTimestamp } from "../utils/format"
+import { lessonAbbreviations, lessonNames, modules } from "../../consts"
+import { db } from "../../database"
+import { parseDatesString } from "../../utils/dates"
+import { createCommandGroup } from "../../utils/discordjs"
+import { formatInstructorFlags, formatTimestamp } from "../../utils/format"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
     builder
       .setName("course")
-      .setDescription("Manage and view courses")
+      .setDescription("[ADMIN] Manage and view courses")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   {
     list: (sub) =>
-      sub.setHandler(listCommand).setDescription("List all courses"),
+      sub.setHandler(listCommand).setDescription("[ADMIN] List all courses"),
     info: (sub) =>
       sub
         .setHandler(infoCommand)
-        .setDescription("Get information about a course")
+        .setDescription("[ADMIN] Get information about a course")
         .addNumberOption((option) =>
           option
             .setName("id")
@@ -34,7 +34,7 @@ export const { command, execute, events } = createCommandGroup(
     add: (sub) =>
       sub
         .setHandler(addCommand)
-        .setDescription("Add a new course")
+        .setDescription("[ADMIN] Add a new course")
         .addNumberOption((option) =>
           option
             .setName("id")
@@ -84,7 +84,7 @@ export const { command, execute, events } = createCommandGroup(
     "add-instructor": (sub) =>
       sub
         .setHandler(addInstructorCommand)
-        .setDescription("Add an instructor to a course")
+        .setDescription("[ADMIN] Add an instructor to a course")
         .addNumberOption((option) =>
           option
             .setName("id")
@@ -108,7 +108,7 @@ export const { command, execute, events } = createCommandGroup(
     "remove-instructor": (sub) =>
       sub
         .setHandler(removeInstructorCommand)
-        .setDescription("Remove an instructor from a course")
+        .setDescription("[ADMIN] Remove an instructor from a course")
         .addNumberOption((option) =>
           option
             .setName("id")
@@ -125,7 +125,7 @@ export const { command, execute, events } = createCommandGroup(
     edit: (sub) =>
       sub
         .setHandler(editCommand)
-        .setDescription("Edit an existing course")
+        .setDescription("[ADMIN] Edit an existing course")
         .addNumberOption((option) =>
           option
             .setName("id")
@@ -144,7 +144,7 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(removeCommand)
         .setName("remove")
-        .setDescription("Remove an existing course")
+        .setDescription("[ADMIN] Remove an existing course")
         .addNumberOption((option) =>
           option
             .setName("id")

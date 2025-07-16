@@ -8,13 +8,13 @@ export const command = new SlashCommandBuilder()
   .setDescription("Set or get your timezone")
   .addStringOption((option) =>
     option
-      .setName("timezone")
+      .setName("set-timezone")
       .setDescription("Your timezone (e.g., 'America/New_York')")
       .setAutocomplete(true),
   )
 
 export const execute = async (interaction: ChatInputCommandInteraction) => {
-  const timezone = interaction.options.getString("timezone")
+  const timezone = interaction.options.getString("set-timezone")
   if (!timezone) {
     const userTimezone = db.getUserTimezone(interaction.user.id)
     if (userTimezone) {

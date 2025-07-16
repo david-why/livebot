@@ -346,6 +346,8 @@ export async function updateSubRequestMessages(client: Client<true>) {
         ),
         allowedMentions: { users: [] },
       })
+      await message.pin()
+      console.log("pinned")
       db.addSubBotMessages([message.id])
       currentContent = ""
       currentOptions.length = 0

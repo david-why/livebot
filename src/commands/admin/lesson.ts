@@ -3,20 +3,20 @@ import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
 } from "discord.js"
-import { createCommandGroup } from "../utils/discordjs"
-import { db } from "../database"
+import { createCommandGroup } from "../../utils/discordjs"
+import { db } from "../../database"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
     builder
       .setName("lesson")
-      .setDescription("Admin commands for lessons")
+      .setDescription("[ADMIN] Manage lessons")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   {
     "add-instructor": (sub) =>
       sub
         .setHandler(addInstructorCommand)
-        .setDescription("Add an instructor to a lesson")
+        .setDescription("[ADMIN] Add an instructor to a lesson")
         .addNumberOption((option) =>
           option
             .setName("lesson")
@@ -45,7 +45,7 @@ export const { command, execute, events } = createCommandGroup(
     "remove-instructor": (sub) =>
       sub
         .setHandler(removeInstructorCommand)
-        .setDescription("Remove an instructor from a lesson")
+        .setDescription("[ADMIN] Remove an instructor from a lesson")
         .addNumberOption((option) =>
           option
             .setName("lesson")

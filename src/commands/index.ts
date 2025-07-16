@@ -20,13 +20,14 @@ function register<T extends { command: { name: string } }>(
   commands.set(command.command.name, command)
 }
 
-import * as config from "./config"
-import * as course from "./course"
-import * as instructor from "./instructor"
-import * as timezone from "./timezone"
+import * as config from "./admin/config"
+import * as course from "./admin/course"
+import * as debug from "./admin/debug"
+import * as instructor from "./admin/instructor"
+import * as lesson from "./admin/lesson"
+import * as lessons from "./lessons"
 import * as sub from "./sub"
-import * as lesson from "./lesson"
-import * as debug from "./debug"
+import * as timezone from "./timezone"
 
 const commands = new Collection<
   string,
@@ -39,11 +40,12 @@ const commands = new Collection<
 
 register(commands, config)
 register(commands, course)
-register(commands, instructor)
-register(commands, timezone)
-register(commands, sub)
-register(commands, lesson)
 register(commands, debug)
+register(commands, instructor)
+register(commands, lesson)
+register(commands, lessons)
+register(commands, sub)
+register(commands, timezone)
 
 export default commands
 

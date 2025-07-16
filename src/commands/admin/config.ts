@@ -4,16 +4,16 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js"
-import { db } from "../database"
+import { db } from "../../database"
 
 export const command = new SlashCommandBuilder()
   .setName("config")
-  .setDescription("Configure the bot settings")
+  .setDescription("[ADMIN] Configure the bot settings")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((sub) =>
     sub
       .setName("sub-channel")
-      .setDescription("Set the channel for posting sub request summaries")
+      .setDescription("[ADMIN] Set the channel for posting sub requests")
       .addChannelOption((option) =>
         option
           .setName("channel")
@@ -25,7 +25,9 @@ export const command = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("sub-notify-channel")
-      .setDescription("Set the channel for posting sub request notifications")
+      .setDescription(
+        "[ADMIN] Set the channel for posting sub request notifications for admins",
+      )
       .addChannelOption((option) =>
         option
           .setName("channel")
@@ -37,7 +39,7 @@ export const command = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("filled-sub-channel")
-      .setDescription("Set the channel for posting filled sub requests")
+      .setDescription("[ADMIN] Set the channel for posting filled sub requests")
       .addChannelOption((option) =>
         option
           .setName("channel")
@@ -49,7 +51,7 @@ export const command = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("admin-role")
-      .setDescription("Set the admin role")
+      .setDescription("[ADMIN] Set the admin role")
       .addRoleOption((option) =>
         option
           .setName("role")
@@ -60,7 +62,7 @@ export const command = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("teaching-role")
-      .setDescription("Set the teaching role")
+      .setDescription("[ADMIN] Set the teaching role")
       .addRoleOption((option) =>
         option
           .setName("role")
@@ -69,7 +71,7 @@ export const command = new SlashCommandBuilder()
       ),
   )
   .addSubcommand((sub) =>
-    sub.setName("get").setDescription("Get the current configuration"),
+    sub.setName("get").setDescription("[ADMIN] Get the current configuration"),
   )
 
 export async function execute(interaction: ChatInputCommandInteraction) {

@@ -1,4 +1,4 @@
-import { Client } from "discord.js"
+import { Client, MessageType } from "discord.js"
 import commands, { contextCommands } from "./commands"
 import { formatOptions } from "./utils/format"
 
@@ -64,6 +64,15 @@ client.on("interactionCreate", async (interaction) => {
         flags: "Ephemeral",
       })
     }
+  }
+})
+
+client.on("messageCreate", async (message) => {
+  if (
+    message.type === MessageType.ChannelPinnedMessage &&
+    message.author.id === client.user!.id
+  ) {
+    await message.delete()
   }
 })
 

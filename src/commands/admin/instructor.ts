@@ -1,16 +1,27 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js"
-import { db } from "../database"
+import { db } from "../../database"
 
 export const command = new SlashCommandBuilder()
   .setName("instructor")
-  .setDescription("Manage LIVE instructors")
+  .setDescription("[ADMIN] Manage LIVE instructors")
   .addSubcommand((sub) =>
-    sub.setName("list").setDescription("List all instructors"),
+    sub.setName("list").setDescription("[ADMIN] List all instructors"),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("add")
+      .setDescription("[ADMIN] Add a new instructor")
+      .addUserOption((option) =>
+        option
+          .setName("user")
+          .setDescription("The user to add as an instructor")
+          .setRequired(true),
+      ),
   )
   .addSubcommand((sub) =>
     sub
       .setName("info")
-      .setDescription("Get information about a specific instructor")
+      .setDescription("[ADMIN] Get information about a specific instructor")
       .addUserOption((option) =>
         option
           .setName("user")
@@ -21,7 +32,7 @@ export const command = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("edit")
-      .setDescription("Edit an instructor's information")
+      .setDescription("[ADMIN] Edit an instructor's information")
       .addUserOption((option) =>
         option
           .setName("user")
@@ -36,6 +47,7 @@ export const command = new SlashCommandBuilder()
 export const execute = async (interaction: ChatInputCommandInteraction) => {
   const subcommand = interaction.options.getSubcommand(true) as
     | "list"
+    | "add"
     | "info"
     | "edit"
 
@@ -53,6 +65,14 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
       .join("\n")
     await interaction.reply({
       content: `Instructors:\n${instructorList}`,
+      allowedMentions: { users: [] },
+    })
+  } else if (subcommand === "add") {
+    const user = interaction.options.getUser("user", true)
+    const name = user.displayName
+    db.addInstructor(user.id, name)
+    await interaction.reply({
+      content: `Instructor ${name} (<@${user.id}>) has been added.`,
       allowedMentions: { users: [] },
     })
   } else if (subcommand === "info") {
