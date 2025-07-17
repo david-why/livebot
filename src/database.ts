@@ -267,9 +267,6 @@ class LiveDatabase {
         "DELETE FROM lesson_instructors WHERE lesson_id = ? AND instructor_id = ?",
       )
       .run(lessonId, instructorId)
-    this.database
-      .query("UPDATE lessons SET google_event_outdated = 1 WHERE id = ?")
-      .run(lessonId)
   }
   addLessonInstructor(
     lessonId: number,
@@ -282,9 +279,6 @@ class LiveDatabase {
         "INSERT INTO lesson_instructors (lesson_id, instructor_id, flags) VALUES (?, ?, ?)",
       )
       .run(lessonId, instructorId, (isSub ? 1 : 0) | (isFreeWill ? 2 : 0))
-    this.database
-      .query("UPDATE lessons SET google_event_outdated = 1 WHERE id = ?")
-      .run(lessonId)
   }
   removeLesson(lessonId: number): void {
     this.database.query("DELETE FROM lessons WHERE id = ?").run(lessonId)

@@ -17,10 +17,8 @@ export const { command, execute, events } = createCommandGroup(
     builder
       .setName("course")
       .setDescription("[ADMIN] Manage and view courses")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   {
-    list: (sub) =>
-      sub.setHandler(listCommand).setDescription("[ADMIN] List all courses"),
     info: (sub) =>
       sub
         .setHandler(infoCommand)
@@ -178,21 +176,6 @@ export const { command, execute, events } = createCommandGroup(
   },
 )
 
-async function listCommand(interaction: ChatInputCommandInteraction) {
-  const courses = db.getAllCourses()
-  if (courses.length === 0) {
-    return interaction.reply({
-      content: "No courses found.",
-    })
-  }
-  const courseList = courses
-    .map((course) => `- LIVE #${course.id} (Module ${course.module})`)
-    .join("\n")
-  await interaction.reply({
-    content: `Existing courses:\n${courseList}`,
-  })
-}
-
 async function infoCommand(interaction: ChatInputCommandInteraction) {
   const id = interaction.options.getNumber("id", true)
   const course = db.getCourse(id)
@@ -349,6 +332,8 @@ async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
     const lessons = db.getCourseLessons(id)
     for (const lesson of lessons) {
       db.addLessonInstructor(lesson.id, instructor.id)
+      lesson.google_event_outdated = 1
+      db.updateLesson(lesson)
     }
     await interaction.reply({
       content: `Instructor <@${instructorUser.id}> has been added to all lessons of course #${id} successfully.`,
@@ -437,7 +422,7 @@ async function removeCommand(interaction: ChatInputCommandInteraction) {
     })
   }
   await interaction.deferReply()
-  
+
   const lessons = db.getCourseLessons(id)
   for (const lesson of lessons) {
     await deleteCalendarEvent(lesson.id)
@@ -457,7 +442,7 @@ async function autocompleteCourseId(interaction: AutocompleteInteraction) {
     course.id.toString().startsWith(focusedValue.toString()),
   )
   return filtered.slice(0, 25).map((course) => ({
-    name: `LIVE #${course.id} (Module ${course.module})`,
+    name: `#${course.id} (Module ${course.module})`,
     value: course.id,
   }))
 }

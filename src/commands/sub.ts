@@ -196,8 +196,11 @@ async function handleAcceptSubMenu(interaction: BaseInteraction) {
   subRequest.filledDate = new Date()
   db.updateSubRequest(subRequest)
 
+  lesson.google_event_outdated = 1
+  db.updateLesson(lesson)
+
   updateSubRequestMessages(interaction.client) // Intentionally not awaited
-  sendSubRequestTakenMessage(interaction.client, subRequest)
+  sendSubRequestTakenMessage(interaction.client, subRequest) // Intentionally not awaited
 
   await buttonInteraction.update({
     content: `You have taken the sub request for this lesson.`,

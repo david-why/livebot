@@ -11,7 +11,7 @@ export const { command, execute, events } = createCommandGroup(
     builder
       .setName("lesson")
       .setDescription("[ADMIN] Manage lessons")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   {
     "add-instructor": (sub) =>
       sub
@@ -104,6 +104,8 @@ async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
   })
 
   const lesson = db.getLesson(lessonId)!
+  lesson.google_event_outdated = 1
+  db.updateLesson(lesson)
 
   return interaction.reply({
     content: `Added <@${instructorUser.id}> as an instructor for lesson #${lesson.course_id} ${lesson.abbrev}.`,
@@ -137,6 +139,8 @@ async function removeInstructorCommand(
   }
   db.removeLessonInstructor(lessonId, instructor.id)
   const lesson = db.getLesson(lessonId)!
+  lesson.google_event_outdated = 1
+  db.updateLesson(lesson)
   return interaction.reply({
     content: `Removed <@${instructorUser.id}> as an instructor for lesson #${lesson.course_id} ${lesson.abbrev}.`,
     allowedMentions: { users: [] },

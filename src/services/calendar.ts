@@ -3,6 +3,10 @@ import { UserRefreshClient } from "googleapis-common"
 import { db } from "../database"
 import type { Lesson } from "../models/lesson"
 
+interface SyncCalendarOptions {
+  callback?: (progress: number) => void
+}
+
 const CALENDAR_ID = process.env.CALENDAR_ID || "primary"
 
 export function getClient() {
@@ -18,12 +22,36 @@ export function getClient() {
   return auth
 }
 
-export async function syncCalendar() {
+let isSyncingCalendar = false
+let shouldSyncCalendar = false
+
+export async function syncCalendar(options: SyncCalendarOptions = {}) {
+  if (isSyncingCalendar) {
+    shouldSyncCalendar = true
+    return
+  }
+
+  isSyncingCalendar = true
+  try {
+    await syncCalendarInner(options)
+  } finally {
+    isSyncingCalendar = false
+    if (shouldSyncCalendar) {
+      shouldSyncCalendar = false
+      syncCalendar()
+    }
+  }
+}
+
+async function syncCalendarInner(options: SyncCalendarOptions) {
   const auth = getClient()
   const calendar = google.calendar({ version: "v3", auth })
 
   const outdatedLessons = db.getAllCalendarOutdatedLessons()
+  let i = -1
   for (const lesson of outdatedLessons) {
+    i++
+    options.callback?.(i / outdatedLessons.length)
     const event = convertLessonToEvent(lesson)
     try {
       if (lesson.google_event_id) {
@@ -44,6 +72,9 @@ export async function syncCalendar() {
       db.updateLesson(lesson)
     } catch (error) {
       console.error(`Failed to update event for lesson ${lesson.id}:`, error)
+    }
+    if (shouldSyncCalendar) {
+      return
     }
   }
 }
@@ -85,14 +116,17 @@ function convertLessonToEvent(lesson: Lesson) {
   endDate.setMinutes(endDate.getMinutes() + course.duration)
 
   const instructorString = instructors
-    .map((instructor) => instructor.name)
+    .map(
+      (instructor) =>
+        `${instructor.name}${instructor.flags & 1 ? "⌖" : ""}${instructor.flags & 2 ? "★" : ""}`,
+    )
     .join(" + ")
   const attendees = instructors.map((instructor) => ({
     email: instructor.email,
   }))
 
   return {
-    summary: `M${course.module} #${course.id} ${instructorString}, ${lesson.abbrev}`,
+    summary: `M${course.module} #${course.id} ${instructorString}, ${lesson.name}`,
     description: lesson.description,
     start: {
       dateTime: lesson.date.toISOString(),

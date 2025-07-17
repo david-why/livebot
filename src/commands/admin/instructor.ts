@@ -1,9 +1,14 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js"
+import {
+  ChatInputCommandInteraction,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from "discord.js"
 import { db } from "../../database"
 
 export const command = new SlashCommandBuilder()
   .setName("instructor")
   .setDescription("[ADMIN] Manage LIVE instructors")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) =>
     sub.setName("list").setDescription("[ADMIN] List all instructors"),
   )
@@ -107,9 +112,17 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
       })
       return
     }
+    await interaction.deferReply()
     if (name) instructor.name = name
     db.updateInstructor(instructor)
-    await interaction.reply({
+    if (name) {
+      const lessons = db.getInstructorLessons(instructor.id)
+      for (const lesson of lessons) {
+        lesson.google_event_outdated = 1
+        db.updateLesson(lesson)
+      }
+    }
+    await interaction.editReply({
       content: `Instructor <@${instructor.discord_id}> has been updated.`,
       allowedMentions: { users: [] },
     })

@@ -7,7 +7,7 @@ export const { command, execute, events } = createCommandGroup(
     builder
       .setName("debug")
       .setDescription("Debug commands")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   {
     "refresh-sub-requests": (sub) =>
       sub

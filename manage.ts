@@ -75,29 +75,24 @@ if (command === "deploy") {
   }
   db.googleCalendarCredentials = JSON.stringify(credentials)
   console.log("Google Calendar credentials saved to the database.")
-} else if (command == "googletest") {
+} else if (command == "clearcalendar") {
   const auth = getClient()
   const calendar = google.calendar({ version: "v3", auth })
   // console.log(items)
   const calendarId = process.env.CALENDAR_ID || "primary"
   const data = await calendar.events.list({
     calendarId: calendarId,
-    timeMin: new Date().toISOString(),
-    maxResults: 10,
+    maxResults: 2500,
     singleEvents: true,
     orderBy: "startTime",
   })
-  const event = data.data.items![0]!
-  // const result = await calendar.events.patch({
-  //   calendarId: calendarId,
-  //   eventId: event.id!,
-  //   requestBody: {
-  //     extendedProperties: {
-  //       shared: {
-  //         test: "This is a test property",
-  //       }
-  //     }
-  //   },
-  // })
-  console.log(event)
+  await Promise.all(
+    (data.data.items ?? []).map(async (event) => {
+      console.log(`Deleting event: ${event.summary} (${event.id})`)
+      await calendar.events.delete({
+        calendarId: calendarId,
+        eventId: event.id!,
+      })
+    }),
+  )
 }

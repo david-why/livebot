@@ -9,7 +9,7 @@ import { db } from "../../database"
 export const command = new SlashCommandBuilder()
   .setName("config")
   .setDescription("[ADMIN] Configure the bot settings")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) =>
     sub
       .setName("sub-channel")
