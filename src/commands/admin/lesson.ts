@@ -17,7 +17,7 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(addInstructorCommand)
         .setDescription("[ADMIN] Add an instructor to a lesson")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("lesson")
             .setDescription("The lesson to add an instructor for")
@@ -46,7 +46,7 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(removeInstructorCommand)
         .setDescription("[ADMIN] Remove an instructor from a lesson")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("lesson")
             .setDescription("The lesson to remove an instructor from")
@@ -73,7 +73,7 @@ export const { command, execute, events } = createCommandGroup(
 )
 
 async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
-  const lessonId = interaction.options.getNumber("lesson", true)
+  const lessonId = interaction.options.getInteger("lesson", true)
   const instructorUser = interaction.options.getUser("instructor", true)
   const isSub = interaction.options.getBoolean("sub") ?? false
   const isFreeWill = interaction.options.getBoolean("freewill") ?? false
@@ -116,7 +116,7 @@ async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
 async function removeInstructorCommand(
   interaction: ChatInputCommandInteraction,
 ) {
-  const lessonId = interaction.options.getNumber("lesson", true)
+  const lessonId = interaction.options.getInteger("lesson", true)
   const instructorUser = interaction.options.getUser("instructor", true)
 
   const instructor = db.getInstructorByDiscordId(instructorUser.id)

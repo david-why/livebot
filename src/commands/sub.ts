@@ -23,7 +23,7 @@ export const { command, execute, events } = createCommand(
       .setHandler(handler)
       .setName("sub")
       .setDescription("Manage sub requests")
-      .addNumberOption((option) =>
+      .addIntegerOption((option) =>
         option
           .setName("lesson")
           .setDescription("The lesson to request a sub for")
@@ -47,7 +47,7 @@ export const { command, execute, events } = createCommand(
 )
 
 async function handler(interaction: ChatInputCommandInteraction) {
-  const lessonId = interaction.options.getNumber("lesson", true)
+  const lessonId = interaction.options.getInteger("lesson", true)
   const reason = interaction.options.getString("reason")
 
   const instructor = db.getInstructorByDiscordId(interaction.user.id)

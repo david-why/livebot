@@ -23,7 +23,7 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(infoCommand)
         .setDescription("[ADMIN] Get information about a course")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("id")
             .setDescription("The ID of the course")
@@ -34,13 +34,13 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(addCommand)
         .setDescription("[ADMIN] Add a new course")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("id")
             .setDescription("ID of the course")
             .setRequired(true),
         )
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("module")
             .setDescription("Module number of the course")
@@ -63,7 +63,7 @@ export const { command, execute, events } = createCommandGroup(
             )
             .setRequired(true),
         )
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("duration")
             .setDescription("Duration of the course in minutes")
@@ -90,7 +90,7 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(addInstructorCommand)
         .setDescription("[ADMIN] Add an instructor to a course")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("id")
             .setDescription("The course to add the instructor to")
@@ -114,7 +114,7 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(removeInstructorCommand)
         .setDescription("[ADMIN] Remove an instructor from a course")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("id")
             .setDescription("The course to remove the instructor from")
@@ -131,14 +131,14 @@ export const { command, execute, events } = createCommandGroup(
       sub
         .setHandler(editCommand)
         .setDescription("[ADMIN] Edit an existing course")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("id")
             .setDescription("ID of the course to edit")
             .setRequired(true)
             .setAutocomplete(true),
         )
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("module")
             .setDescription("Module number of the course")
@@ -150,7 +150,7 @@ export const { command, execute, events } = createCommandGroup(
         .setHandler(removeCommand)
         .setName("remove")
         .setDescription("[ADMIN] Remove an existing course")
-        .addNumberOption((option) =>
+        .addIntegerOption((option) =>
           option
             .setName("id")
             .setDescription("ID of the course to remove")
@@ -177,7 +177,7 @@ export const { command, execute, events } = createCommandGroup(
 )
 
 async function infoCommand(interaction: ChatInputCommandInteraction) {
-  const id = interaction.options.getNumber("id", true)
+  const id = interaction.options.getInteger("id", true)
   const course = db.getCourse(id)
   if (!course) {
     return interaction.reply({
@@ -209,11 +209,11 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
 }
 
 async function addCommand(interaction: ChatInputCommandInteraction) {
-  const id = interaction.options.getNumber("id", true)
-  const module = interaction.options.getNumber("module", true)
+  const id = interaction.options.getInteger("id", true)
+  const module = interaction.options.getInteger("module", true)
   const time = interaction.options.getString("time", true)
   const datesString = interaction.options.getString("dates", true)
-  const duration = interaction.options.getNumber("duration", true)
+  const duration = interaction.options.getInteger("duration", true)
   const timezone =
     interaction.options.getString("timezone") ?? "America/New_York"
   const instructor1User = interaction.options.getUser("instructor1")
@@ -293,7 +293,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
 }
 
 async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
-  const id = interaction.options.getNumber("id", true)
+  const id = interaction.options.getInteger("id", true)
   const instructorUser = interaction.options.getUser("instructor", true)
   const addToAllLessons = interaction.options.getBoolean("lessons") ?? false
 
@@ -351,7 +351,7 @@ async function addInstructorCommand(interaction: ChatInputCommandInteraction) {
 async function removeInstructorCommand(
   interaction: ChatInputCommandInteraction,
 ) {
-  const id = interaction.options.getNumber("id", true)
+  const id = interaction.options.getInteger("id", true)
   const instructorUser = interaction.options.getUser("instructor", true)
 
   // Check if course exists
@@ -392,8 +392,8 @@ async function removeInstructorCommand(
 }
 
 async function editCommand(interaction: ChatInputCommandInteraction) {
-  const id = interaction.options.getNumber("id", true)
-  const module = interaction.options.getNumber("module")
+  const id = interaction.options.getInteger("id", true)
+  const module = interaction.options.getInteger("module")
 
   const course = db.getCourse(id)
   if (!course) {
@@ -413,7 +413,7 @@ async function editCommand(interaction: ChatInputCommandInteraction) {
 
 async function removeCommand(interaction: ChatInputCommandInteraction) {
   // FIXME: Ask for confirmation first
-  const id = interaction.options.getNumber("id", true)
+  const id = interaction.options.getInteger("id", true)
   const course = db.getCourse(id)
   if (!course) {
     return interaction.reply({
