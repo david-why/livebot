@@ -6,3 +6,15 @@ export class Instructor {
     public name: string,
   ) {}
 }
+
+export class LessonInstructor extends Instructor {
+  constructor(
+    id: number,
+    discord_id: string,
+    email: string,
+    name: string,
+    public flags: number,
+  ) {
+    super(id, discord_id, email, name)
+  }
+}

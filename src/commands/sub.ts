@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   Client,
   EmbedBuilder,
+  MessageComponentInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   type ApplicationCommandOptionChoiceData,
@@ -50,7 +51,18 @@ async function handler(interaction: ChatInputCommandInteraction) {
   const lessonId = interaction.options.getInteger("lesson", true)
   const reason = interaction.options.getString("reason")
 
-  const instructor = db.getInstructorByDiscordId(interaction.user.id)
+  await handleAddSubRequest(interaction, lessonId, reason)
+}
+
+export async function handleAddSubRequest(
+  interaction: ChatInputCommandInteraction | MessageComponentInteraction,
+  lessonId: number,
+  reason?: string | null,
+  instructorId?: number,
+) {
+  const instructor = instructorId
+    ? db.getInstructor(instructorId)
+    : db.getInstructorByDiscordId(interaction.user.id)
   if (!instructor) {
     return interaction.reply({
       content: "You are not registered as an instructor.",
@@ -62,6 +74,13 @@ async function handler(interaction: ChatInputCommandInteraction) {
   if (!lesson) {
     return interaction.reply({
       content: "This lesson does not exist.",
+      flags: "Ephemeral",
+    })
+  }
+  const subRequests = db.getLessonOpenSubRequests(lessonId)
+  if (subRequests.some((r) => r.instructor_id === instructor.id)) {
+    return interaction.reply({
+      content: "You have already requested a sub for this lesson.",
       flags: "Ephemeral",
     })
   }
@@ -98,7 +117,7 @@ async function handler(interaction: ChatInputCommandInteraction) {
 
   await buttonInteraction.deferUpdate()
 
-  db.addSubRequest(lessonId, instructor.id, reason)
+  db.addSubRequest(lessonId, instructor.id, reason || null)
   updateSubRequestMessages(interaction.client) // Intentionally not awaited
 
   await buttonInteraction.editReply({
@@ -114,11 +133,10 @@ async function lessonAutocomplete(
   if (!instructorId) {
     return []
   }
-  const lessons = db.getInstructorLessons(instructorId)
+  const lessons = db.getFutureInstructorLessons(instructorId)
   const timezone = db.getUserTimezone(interaction.user.id) ?? "UTC"
   return lessons
     .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .filter((lesson) => lesson.date.getTime() > Date.now())
     .map((lesson) => ({
       name: `#${lesson.course_id} ${lesson.abbrev} - ${lesson.date.toLocaleDateString(
         "en-CA",
@@ -141,6 +159,8 @@ async function handleAcceptSubMenu(interaction: BaseInteraction) {
     })
   }
 
+  const lessonId = subRequest.lesson_id
+
   const instructor = db.getInstructorByDiscordId(interaction.user.id)
   if (!instructor) {
     return interaction.reply({
@@ -154,8 +174,13 @@ async function handleAcceptSubMenu(interaction: BaseInteraction) {
       flags: "Ephemeral",
     })
   }
+  if (db.getLessonInstructors(lessonId).some((i) => i.id === instructor.id)) {
+    return interaction.reply({
+      content: "You are already an instructor for this lesson.",
+      flags: "Ephemeral",
+    })
+  }
 
-  const lessonId = subRequest.lesson_id
   const lesson = db.getLesson(lessonId)!
 
   const response = await interaction.reply({

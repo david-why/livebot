@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite"
 import { Course } from "./models/course"
-import { Instructor } from "./models/instructor"
+import { Instructor, LessonInstructor } from "./models/instructor"
 import { Lesson } from "./models/lesson"
 import { SubRequest } from "./models/sub_request"
 
@@ -251,7 +251,7 @@ class LiveDatabase {
         lesson.id,
       )
   }
-  getLessonInstructors(lessonId: number): (Instructor & { flags: number })[] {
+  getLessonInstructors(lessonId: number): LessonInstructor[] {
     return this.database
       .query(
         `SELECT li.flags, i.* FROM lesson_instructors li
@@ -259,7 +259,7 @@ class LiveDatabase {
          WHERE li.lesson_id = ?`,
       )
       .as(Instructor)
-      .all(lessonId) as (Instructor & { flags: number })[]
+      .all(lessonId) as LessonInstructor[]
   }
   removeLessonInstructor(lessonId: number, instructorId: number): void {
     this.database
@@ -282,6 +282,16 @@ class LiveDatabase {
   }
   removeLesson(lessonId: number): void {
     this.database.query("DELETE FROM lessons WHERE id = ?").run(lessonId)
+  }
+  getLessonOpenSubRequests(lessonId: number): SubRequest[] {
+    return this.database
+      .query(
+        `SELECT sr.* FROM sub_requests sr
+         JOIN lessons l ON sr.lesson_id = l.id
+         WHERE l.id = ? AND sr.is_open = 1`,
+      )
+      .as(SubRequest)
+      .all(lessonId)
   }
 
   getUserTimezone(discordId: string): string | null {
@@ -311,6 +321,16 @@ class LiveDatabase {
       )
       .as(Lesson)
       .all(instructorId)
+  }
+  getFutureInstructorLessons(instructorId: number): Lesson[] {
+    return this.database
+      .query(
+        `SELECT l.* FROM lessons l
+         JOIN lesson_instructors li ON l.id = li.lesson_id
+         WHERE li.instructor_id = ? AND l.date_timestamp > ?`,
+      )
+      .as(Lesson)
+      .all(instructorId, Date.now())
   }
 
   addSubRequest(
