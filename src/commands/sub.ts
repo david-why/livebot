@@ -211,11 +211,11 @@ async function handleAcceptSubMenu(interaction: BaseInteraction) {
     })
   }
 
-  db.removeLessonInstructor(lessonId, subRequest.instructor_id)
   db.addLessonInstructor(lessonId, instructor.id, {
     isSub: true,
     isFreeWill: true,
   })
+  db.removeLessonInstructor(lessonId, subRequest.instructor_id)
   subRequest.is_open = 0
   subRequest.filled_by = instructor.id
   subRequest.filledDate = new Date()

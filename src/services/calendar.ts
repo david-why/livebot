@@ -45,7 +45,7 @@ export async function syncCalendar(options: SyncCalendarOptions = {}) {
 
 async function syncCalendarInner(options: SyncCalendarOptions) {
   const auth = getClient()
-  const calendar = google.calendar({ version: "v3", auth })
+  const calendar = google.calendar({ version: "v3", auth, retry: true })
 
   const outdatedLessons = db.getAllCalendarOutdatedLessons()
   let i = -1
@@ -60,15 +60,14 @@ async function syncCalendarInner(options: SyncCalendarOptions) {
           eventId: lesson.google_event_id,
           requestBody: event,
         })
-        lesson.google_event_outdated = 0
       } else {
         const response = await calendar.events.insert({
           calendarId: CALENDAR_ID,
           requestBody: event,
         })
         lesson.google_event_id = response.data.id || null
-        lesson.google_event_outdated = 0
       }
+      lesson.google_event_outdated = 0
       db.updateLesson(lesson)
     } catch (error) {
       console.error(`Failed to update event for lesson ${lesson.id}:`, error)
@@ -81,7 +80,7 @@ async function syncCalendarInner(options: SyncCalendarOptions) {
 
 export async function deleteCalendarEvent(lessonId: number) {
   const auth = getClient()
-  const calendar = google.calendar({ version: "v3", auth })
+  const calendar = google.calendar({ version: "v3", auth, retry: true })
 
   const response = await calendar.events.list({
     calendarId: CALENDAR_ID,
@@ -97,10 +96,12 @@ export async function deleteCalendarEvent(lessonId: number) {
         calendarId: CALENDAR_ID,
         eventId: event.id,
       })
-      const lesson = db.getLesson(lessonId)!
-      lesson.google_event_id = null
-      lesson.google_event_outdated = 1
-      db.updateLesson(lesson)
+      const lesson = db.getLesson(lessonId)
+      if (lesson) {
+        lesson.google_event_id = null
+        lesson.google_event_outdated = 1
+        db.updateLesson(lesson)
+      }
       console.log(`Deleted event for lesson ${lessonId}: ${event.id}`)
     } catch (error) {
       console.error(`Failed to delete event for lesson ${lessonId}:`, error)

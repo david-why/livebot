@@ -77,11 +77,11 @@ async function fillCommand(interaction: ChatInputCommandInteraction) {
 
   const lessonId = subRequest.lesson_id
 
-  db.removeLessonInstructor(lessonId, subRequest.instructor_id)
   db.addLessonInstructor(lessonId, instructor.id, {
     isSub: true,
     isFreeWill: freeWill,
   })
+  db.removeLessonInstructor(lessonId, subRequest.instructor_id)
 
   subRequest.filled_by = instructor.id
   subRequest.filledDate = new Date()

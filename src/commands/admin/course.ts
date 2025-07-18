@@ -425,7 +425,7 @@ async function removeCommand(interaction: ChatInputCommandInteraction) {
 
   const lessons = db.getCourseLessons(id)
   for (const lesson of lessons) {
-    await deleteCalendarEvent(lesson.id)
+    deleteCalendarEvent(lesson.id) // Intentially not awaited
   }
 
   db.removeCourse(id)

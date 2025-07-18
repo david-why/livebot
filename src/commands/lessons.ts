@@ -18,7 +18,10 @@ export const { command, execute, events } = createCommand(
     builder
       .setHandler(handler)
       .setName("lessons")
-      .setDescription("View your lessons"),
+      .setDescription("View your lessons")
+      .addBooleanOption((option) =>
+        option.setName("past").setDescription("Include past lessons"),
+      ),
   {
     events: {
       interactionCreate: wrapEventHandler(handlePageChange, handleSubMenu),
@@ -27,6 +30,8 @@ export const { command, execute, events } = createCommand(
 )
 
 async function handler(interaction: ChatInputCommandInteraction) {
+  const past = interaction.options.getBoolean("past") ?? false
+
   const instructor = db.getInstructorByDiscordId(interaction.user.id)
   if (!instructor) {
     return interaction.reply({
@@ -37,9 +42,10 @@ async function handler(interaction: ChatInputCommandInteraction) {
 
   await interaction.deferReply({ flags: "Ephemeral" })
 
-  const lessons = db.getInstructorLessons(instructor.id)
-
-  const messages = await getUserLessonsMessages(lessons)
+  const messages = await getUserLessonsMessages(
+    interaction.user.id,
+    past ? "all" : "future",
+  )
   if (messages.length === 0) {
     return interaction.reply({
       content: "You have no lessons.",
@@ -52,17 +58,16 @@ async function handler(interaction: ChatInputCommandInteraction) {
 
 async function handlePageChange(interaction: BaseInteraction) {
   if (!interaction.isButton()) return
-  const match = interaction.customId.match(/^lessons_page_(\d+)$/)
+  const match = interaction.customId.match(/^lessons_page_(\d+)_(\d+)_(\w+)$/)
   if (!match) return
 
   const page = parseInt(match[1]!, 10)
+  const userId = match[2]!
+  const type = match[3] as "future" | "all"
 
   await interaction.deferUpdate()
 
-  const instructor = db.getInstructorByDiscordId(interaction.user.id)!
-  const lessons = db.getInstructorLessons(instructor.id)
-
-  const messages = await getUserLessonsMessages(lessons)
+  const messages = await getUserLessonsMessages(userId, type)
   if (messages.length === 0) {
     return interaction.reply({
       content: "You have no lessons.",
@@ -82,7 +87,13 @@ async function handleSubMenu(interaction: BaseInteraction) {
   await handleAddSubRequest(interaction, lessonId)
 }
 
-async function getUserLessonsMessages(lessons: Lesson[]) {
+async function getUserLessonsMessages(userId: string, type: "future" | "all") {
+  const instructor = db.getInstructorByDiscordId(userId)!
+
+  const lessons =
+    type === "future"
+      ? db.getFutureInstructorLessons(instructor.id)
+      : db.getInstructorLessons(instructor.id)
   if (lessons.length === 0) {
     return []
   }
@@ -117,13 +128,13 @@ async function getUserLessonsMessages(lessons: Lesson[]) {
           subSelectMenu,
         )
       const prevPage = new ButtonBuilder()
-        .setCustomId(`lessons_page_${currentPage - 1}`)
+        .setCustomId(`lessons_page_${currentPage - 1}_${userId}_${type}`)
         .setLabel("Previous")
         .setEmoji("◀️")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(currentPage === 0)
       const nextPage = new ButtonBuilder()
-        .setCustomId(`lessons_page_${currentPage + 1}`)
+        .setCustomId(`lessons_page_${currentPage + 1}_${userId}_${type}`)
         .setLabel("Next")
         .setEmoji("▶️")
         .setStyle(ButtonStyle.Secondary)
