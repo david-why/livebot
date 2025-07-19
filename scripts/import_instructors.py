@@ -37,6 +37,11 @@ df["Instructor #"] = (
 not_found_rows = []
 
 for row in df.itertuples(index=False):
+    cursor.execute('SELECT 1 FROM instructors WHERE id = ?', (row[0],))
+    existing = cursor.fetchone()
+    if existing:
+        continue
+
     instructor_id = row[0]
     first_name = row[1].strip()
     last_name = row[2].strip()
@@ -47,7 +52,7 @@ for row in df.itertuples(index=False):
         first_name = first_name.split('(')[1].strip().split(')')[0].strip()
 
     full_name = f"{first_name} {last_name}"
-    
+
     # find the discord user with this name
     discord_id = None
     for member in members:
@@ -68,12 +73,14 @@ for row in df.itertuples(index=False):
 db.commit()
 
 for row in not_found_rows:
-    cursor.execute('SELECT discord_id FROM instructors WHERE id = ?', (row[0],))
+    cursor.execute('SELECT 1 FROM instructors WHERE id = ?', (row[0],))
     existing = cursor.fetchone()
     if existing:
         continue
     discord_id = input(f"{row[1]} {row[2]} ({row[4]}) ")
     if discord_id:
+        if discord_id == '0':
+            discord_id = ''
         cursor.execute(
             "INSERT OR REPLACE INTO instructors (id, discord_id, name, email) VALUES (?, ?, ?, ?)",
             (row[0], discord_id, f"{row[1].strip()} {row[2].strip()}", row[3].strip()),

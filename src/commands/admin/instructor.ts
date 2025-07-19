@@ -1,9 +1,16 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChatInputCommandInteraction,
+  ContainerBuilder,
   PermissionFlagsBits,
   SlashCommandBuilder,
+  TextDisplayBuilder,
 } from "discord.js"
 import { db } from "../../database"
+import { formatInstructor } from "../../utils/format"
+import { paginate } from "../../utils/paginate"
 
 export const command = new SlashCommandBuilder()
   .setName("instructor")
@@ -71,13 +78,7 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
       })
       return
     }
-    const instructorList = instructors
-      .map((i) => `- ${i.name} (<@${i.discord_id}>)`)
-      .join("\n")
-    await interaction.reply({
-      content: `Instructors:\n${instructorList}`,
-      allowedMentions: { users: [] },
-    })
+    await interaction.reply(getInstructorListMessage(0))
   } else if (subcommand === "add") {
     const user = interaction.options.getUser("user", true)
     const email = interaction.options.getString("email", true)
@@ -98,7 +99,7 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
       return
     }
     await interaction.reply({
-      content: `Instructor Info:\nName: ${instructor.name}\nUser: <@${instructor.discord_id}>`,
+      content: `Instructor Info:\nName: ${instructor.name}\nUser: ${instructor.discord_id ? `<@${instructor.discord_id}>` : "Unknown"}`,
       allowedMentions: { users: [] },
     })
   } else if (subcommand === "edit") {
@@ -123,8 +124,71 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
       }
     }
     await interaction.editReply({
-      content: `Instructor <@${instructor.discord_id}> has been updated.`,
+      content: `Instructor ${formatInstructor(instructor)} has been updated.`,
       allowedMentions: { users: [] },
     })
   }
+}
+
+export const events = {
+  interactionCreate: async (interaction) => {
+    if (!interaction.isButton()) return
+    const match = interaction.customId.match(/^instructors_list_page_(\d+)$/)
+    if (!match) return
+    const page = parseInt(match[1]!, 10)
+    const message = getInstructorListMessage(page)
+    return interaction.update({ ...message, flags: "IsComponentsV2" })
+  },
+} satisfies Partial<ClientEventHandlers>
+
+function getInstructorListMessage(page: number) {
+  const instructors = db.getAllInstructors()
+  const flags = ["IsComponentsV2", "Ephemeral"] as const
+  if (instructors.length === 0) {
+    return {
+      flags,
+      components: [
+        new TextDisplayBuilder().setContent("No instructors found."),
+      ],
+    } as const
+  }
+  const paginatedInstructors = paginate(
+    instructors.map((i) => ({
+      content: `- ${formatInstructor(i, { discord: false })} (${formatInstructor(i)})`,
+    })),
+  )
+  if (page < 0 || page >= paginatedInstructors.length) {
+    page = 0
+  }
+  const titleText = new TextDisplayBuilder().setContent(`## Instructors`)
+  const instructorsText = new TextDisplayBuilder().setContent(
+    `${paginatedInstructors[page]!.content}`,
+  )
+  const pageText = new TextDisplayBuilder().setContent(
+    `-# Page ${page + 1} of ${paginatedInstructors.length}`,
+  )
+  const prevPage = new ButtonBuilder()
+    .setCustomId(`instructors_list_page_${page - 1}`)
+    .setLabel("Last page")
+    .setEmoji("◀️")
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(page === 0)
+  const nextPage = new ButtonBuilder()
+    .setCustomId(`instructors_list_page_${page + 1}`)
+    .setLabel("Next page")
+    .setEmoji("▶️")
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(page === paginatedInstructors.length - 1)
+  const actionRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    prevPage,
+    nextPage,
+  )
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(titleText, instructorsText, pageText)
+    .addActionRowComponents(actionRow1)
+  return {
+    flags,
+    components: [container],
+    allowedMentions: { users: [] },
+  } as const
 }

@@ -5,6 +5,7 @@ import {
 } from "discord.js"
 import { createCommandGroup } from "../../utils/discordjs"
 import { db } from "../../database"
+import { formatInstructor } from "../../utils/format"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
@@ -131,7 +132,7 @@ async function removeInstructorCommand(
   if (!existingInstructors.some((i) => i.id === instructor.id)) {
     return interaction.reply({
       content: `<@${instructorUser.id}> is not an instructor for this lesson. The instructors are ${existingInstructors
-        .map((i) => `<@${i.discord_id}>`)
+        .map((i) => formatInstructor(i))
         .join(" & ")}`,
       flags: "Ephemeral",
       allowedMentions: { users: [] },

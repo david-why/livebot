@@ -10,6 +10,7 @@ import { db } from "../../database"
 import { parseDatesString } from "../../utils/dates"
 import { createCommandGroup } from "../../utils/discordjs"
 import {
+  formatInstructor,
   formatLessonInstructors,
   formatTimestamp,
 } from "../../utils/format"
@@ -207,7 +208,7 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
     .join("\n")
   const content =
     `Course LIVE #${id} (Module ${course.module})\n` +
-    `Instructors: ${instructors.map((i) => `<@${i.discord_id}>`).join(", ")}\n` +
+    `Instructors: ${instructors.map(i => formatInstructor(i)).join(", ")}\n` +
     `Scheduled dates:\n${scheduledDates}`
   await interaction.reply({
     embeds: [

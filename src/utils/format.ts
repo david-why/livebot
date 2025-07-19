@@ -45,27 +45,25 @@ export function formatInstructor(
 
 export function formatLessonInstructors(
   instructors: LessonInstructor[],
+  options?: { discord?: boolean; compact?: boolean },
 ): string {
   return instructors
-    .map((i) => `<@${i.discord_id}>${formatInstructorFlags(i.flags)}`)
+    .map(
+      (i) =>
+        `${formatInstructor(i, options)}${formatInstructorFlags(i.flags, options)}`,
+    )
     .join(" & ")
 }
 
-export function formatLessonInstructorsCompact(
-  instructors: LessonInstructor[],
-): string {
-  return instructors
-    .map((i) => `<@${i.discord_id}>${formatInstructorFlagsCompact(i.flags)}`)
-    .join(" & ")
-}
-
-export function formatInstructorFlags(flags: number) {
+export function formatInstructorFlags(
+  flags: number,
+  options?: { compact?: boolean },
+) {
+  if (options?.compact) {
+    return `${flags & 1 ? "⌖" : ""}${flags & 2 ? "★" : ""}`
+  }
   const flagsList: string[] = []
   if (flags & 1) flagsList.push("Sub")
   if (flags & 2) flagsList.push("Free-Will")
   return flagsList.length > 0 ? ` (${flagsList.join(", ")})` : ""
-}
-
-export function formatInstructorFlagsCompact(flags: number) {
-  return `${flags & 1 ? "⌖" : ""}${flags & 2 ? "★" : ""}`
 }

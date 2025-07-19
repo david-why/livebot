@@ -11,10 +11,7 @@ import {
 import { db } from "../database"
 import type { Lesson } from "../models/lesson"
 import { createCommand, wrapEventHandler } from "../utils/discordjs"
-import {
-  formatLessonInstructorsCompact,
-  formatTimestamp,
-} from "../utils/format"
+import { formatLessonInstructors, formatTimestamp } from "../utils/format"
 import { handleAddSubRequest } from "./sub"
 
 export const { command, execute, events } = createCommand(
@@ -173,7 +170,7 @@ async function getUserLessonsMessages(userId: string, type: "future" | "all") {
       (r) => r.instructor_id === instructor.id,
     )
     const instructors = db.getLessonInstructors(lesson.id)
-    const lessonContent = `**#${lesson.course_id} ${lesson.name}** - ${formatTimestamp(lesson.date)} (${formatLessonInstructorsCompact(instructors)}${hasSubRequest ? ", sub requested" : ""})`
+    const lessonContent = `**#${lesson.course_id} ${lesson.name}** - ${formatTimestamp(lesson.date)} (${formatLessonInstructors(instructors, { compact: true })}${hasSubRequest ? ", sub requested" : ""})`
     if (
       currentLessons.length >= 25 ||
       currentContent.length + lessonContent.length + 1 > 3500

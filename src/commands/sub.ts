@@ -15,7 +15,7 @@ import {
 } from "discord.js"
 import { createCommand } from "../utils/discordjs"
 import { db } from "../database"
-import { formatTimestamp } from "../utils/format"
+import { formatInstructor, formatTimestamp } from "../utils/format"
 import type { SubRequest } from "../models/sub_request"
 
 export const { command, execute, events } = createCommand(
@@ -268,7 +268,7 @@ async function checkSubRequests(client: Client<true>) {
     if (lesson.date.getTime() - now.getTime() < 60 * 60 * 1000) {
       if (subRequest.sent_notification >= 2) continue
       await subChannel?.send({
-        content: `‼️ ${teachingPing} The sub request for #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)} by <@${instructor.discord_id}> is still open! Please help out if you can!`,
+        content: `‼️ ${teachingPing} The sub request for #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)} by ${formatInstructor(instructor)} is still open! Please help out if you can!`,
         allowedMentions: {
           roles: teachingRoleId ? [teachingRoleId] : [],
           users: [],
@@ -282,7 +282,7 @@ async function checkSubRequests(client: Client<true>) {
 
     if (subRequest.sent_notification >= 1) continue
     await notifyChannel?.send({
-      content: `‼️ ${adminPing} The sub request for #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)} by <@${instructor.discord_id}> is still open! I will ping @Teaching 1 hour before the lesson, but it might be a good idea to start DMing people.`,
+      content: `‼️ ${adminPing} The sub request for #${lesson.course_id} ${lesson.abbrev} on ${formatTimestamp(lesson.date)} by ${formatInstructor(instructor)} is still open! I will ping @Teaching 1 hour before the lesson, but it might be a good idea to start DMing people.`,
       allowedMentions: {
         roles: adminRoleId ? [adminRoleId] : [],
         users: [],
@@ -332,7 +332,7 @@ export async function updateSubRequestMessages(client: Client<true>) {
       const course = db.getCourse(lesson.course_id)!
       const instructor = db.getInstructor(subRequest.instructor_id)!
 
-      const content = `${formatTimestamp(lesson.date)}, Live ${lesson.course_id}, M${course.module}${lesson.abbrev} (sub for <@${instructor.discord_id}>${subRequest.reason ? `: ${subRequest.reason}` : ""})`
+      const content = `${formatTimestamp(lesson.date)}, Live ${lesson.course_id}, M${course.module}${lesson.abbrev} (sub for ${formatInstructor(instructor)}${subRequest.reason ? `: ${subRequest.reason}` : ""})`
       const label = `#${lesson.course_id} M${course.module}${lesson.abbrev}`
 
       contentLines.push({ content, label, id: subRequest.id })
@@ -418,7 +418,7 @@ export function sendSubRequestTakenMessage(
   const instructor = db.getInstructor(subRequest.instructor_id)!
   const filledInstructor = db.getInstructor(subRequest.filled_by!)!
 
-  const content = `~~${formatTimestamp(lesson.date)}, Live ${lesson.course_id}, M${course.module}${lesson.abbrev} (sub for <@${instructor.discord_id}>${subRequest.reason ? `: ${subRequest.reason}` : ""})~~ <@${filledInstructor.discord_id}>${isFreeWill ? " ★" : ""}`
+  const content = `~~${formatTimestamp(lesson.date)}, Live ${lesson.course_id}, M${course.module}${lesson.abbrev} (sub for ${formatInstructor(instructor)}${subRequest.reason ? `: ${subRequest.reason}` : ""})~~ ${formatInstructor(filledInstructor)}${isFreeWill ? " ★" : ""}`
 
   return channel.send({
     content,

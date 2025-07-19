@@ -3,6 +3,7 @@ import { UserRefreshClient } from "googleapis-common"
 import { db } from "../database"
 import type { Lesson } from "../models/lesson"
 import { CourseFlags } from "../models/course"
+import { formatInstructor, formatInstructorFlags } from "../utils/format"
 
 interface SyncCalendarOptions {
   callback?: (progress: number) => void
@@ -127,7 +128,7 @@ function convertLessonToEvent(lesson: Lesson) {
   const instructorString = instructors
     .map(
       (instructor) =>
-        `${instructor.name}${instructor.flags & 1 ? "⌖" : ""}${instructor.flags & 2 ? "★" : ""}`,
+        `${formatInstructor(instructor, { discord: false })}${formatInstructorFlags(instructor.flags, { compact: true })}`,
     )
     .join(" + ")
   const attendees = instructors.map((instructor) => ({
@@ -135,7 +136,7 @@ function convertLessonToEvent(lesson: Lesson) {
   }))
 
   return {
-    summary: `M${course.module} #${course.id} ${instructorString}, ${lesson.name}`,
+    summary: `M${course.module} #${course.id} ${instructorString}, ${lesson.abbrev}`,
     description: lesson.description,
     start: {
       dateTime: lesson.date.toISOString(),

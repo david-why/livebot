@@ -19,7 +19,7 @@ export const execute = async (interaction: ChatInputCommandInteraction) => {
     const userTimezone = db.getUserTimezone(interaction.user.id)
     if (userTimezone) {
       return interaction.reply({
-        content: `Your current timezone is \`${userTimezone}\`.`,
+        content: `Your current timezone is \`${userTimezone}\`. To set a timezone, pass the "set-timezone" option.`,
         flags: "Ephemeral",
       })
     }
