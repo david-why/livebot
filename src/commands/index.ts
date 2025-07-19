@@ -25,6 +25,7 @@ import * as calendar from "./admin/calendar"
 import * as config from "./admin/config"
 import * as course from "./admin/course"
 import * as debug from "./admin/debug"
+import * as exportCommand from "./admin/export"
 import * as instructor from "./admin/instructor"
 import * as lesson from "./admin/lesson"
 import * as lessons from "./lessons"
@@ -45,6 +46,7 @@ register(commands, calendar)
 register(commands, config)
 register(commands, course)
 register(commands, debug)
+register(commands, exportCommand)
 register(commands, instructor)
 register(commands, lesson)
 register(commands, lessons)

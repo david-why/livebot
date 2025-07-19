@@ -9,8 +9,12 @@ import { lessonAbbreviations, lessonNames, modules } from "../../consts"
 import { db } from "../../database"
 import { parseDatesString } from "../../utils/dates"
 import { createCommandGroup } from "../../utils/discordjs"
-import { formatInstructorFlags, formatTimestamp } from "../../utils/format"
+import {
+  formatLessonInstructors,
+  formatTimestamp,
+} from "../../utils/format"
 import { deleteCalendarEvent } from "../../services/calendar"
+import { CourseFlags } from "../../models/course"
 
 export const { command, execute, events } = createCommandGroup(
   (builder) =>
@@ -84,6 +88,13 @@ export const { command, execute, events } = createCommandGroup(
             .setName("timezone")
             .setDescription(
               "Timezone for the course dates (default is 'America/New_York', e.g. 'Asia/Shanghai')",
+            ),
+        )
+        .addBooleanOption((option) =>
+          option
+            .setName("no-calendar")
+            .setDescription(
+              "Whether to disable calendar events for this course (default is false)",
             ),
         ),
     "add-instructor": (sub) =>
@@ -190,9 +201,7 @@ async function infoCommand(interaction: ChatInputCommandInteraction) {
   const scheduledDates = lessons
     .map((lesson) => {
       const instructors = db.getLessonInstructors(lesson.id)
-      const instructorMentions = instructors
-        .map((i) => `<@${i.discord_id}>${formatInstructorFlags(i.flags)}`)
-        .join(" & ")
+      const instructorMentions = formatLessonInstructors(instructors)
       return `- ${lesson.name}, ${formatTimestamp(lesson.date)}, ${instructorMentions}`
     })
     .join("\n")
@@ -218,6 +227,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
     interaction.options.getString("timezone") ?? "America/New_York"
   const instructor1User = interaction.options.getUser("instructor1")
   const instructor2User = interaction.options.getUser("instructor2")
+  const noCalendar = interaction.options.getBoolean("no-calendar") ?? false
 
   // Check if course already exists
   const existingCourse = db.getCourse(id)
@@ -275,7 +285,7 @@ async function addCommand(interaction: ChatInputCommandInteraction) {
       ? lessonAbbreviations
       : dates.map((_, i) => `L${i + 1}`)
 
-  db.addCourse(id, module, duration)
+  db.addCourse(id, module, duration, noCalendar ? CourseFlags.NoCalendar : 0)
   db.addCourseInstructors(id, instructorIds)
   for (let i = 0; i < dates.length; i++) {
     db.addCourseLesson(

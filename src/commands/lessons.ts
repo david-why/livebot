@@ -3,14 +3,18 @@ import {
   BaseInteraction,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
+  ContainerBuilder,
   StringSelectMenuBuilder,
+  TextDisplayBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js"
-import { createCommand, wrapEventHandler } from "../utils/discordjs"
 import { db } from "../database"
-import { formatTimestamp } from "../utils/format"
 import type { Lesson } from "../models/lesson"
+import { createCommand, wrapEventHandler } from "../utils/discordjs"
+import {
+  formatLessonInstructorsCompact,
+  formatTimestamp,
+} from "../utils/format"
 import { handleAddSubRequest } from "./sub"
 
 export const { command, execute, events } = createCommand(
@@ -47,9 +51,8 @@ async function handler(interaction: ChatInputCommandInteraction) {
     past ? "all" : "future",
   )
   if (messages.length === 0) {
-    return interaction.reply({
+    return interaction.followUp({
       content: "You have no lessons.",
-      flags: "Ephemeral",
     })
   }
 
@@ -101,11 +104,11 @@ async function getUserLessonsMessages(userId: string, type: "future" | "all") {
   lessons.sort((a, b) => a.date.getTime() - b.date.getTime())
 
   const messages: {
-    embeds: [EmbedBuilder]
-    components: [
-      ActionRowBuilder<StringSelectMenuBuilder>,
-      ActionRowBuilder<ButtonBuilder>,
-    ]
+    flags: "IsComponentsV2"
+    components:
+      | [ContainerBuilder, ActionRowBuilder<StringSelectMenuBuilder>]
+      | [ContainerBuilder]
+    allowedMentions: { users: [] }
   }[] = []
   let currentContent = ""
   let currentLessons: Lesson[] = []
@@ -119,23 +122,29 @@ async function getUserLessonsMessages(userId: string, type: "future" | "all") {
           label: `#${l.course_id} ${l.name}`,
           value: l.id.toString(),
         }))
+      const lessonsText = new TextDisplayBuilder().setContent(
+        "## Your Lessons\n" + currentContent,
+      )
       const subSelectMenu = new StringSelectMenuBuilder()
         .setCustomId("lessons_sub_select")
-        .setPlaceholder("Request a sub")
+        .setPlaceholder("Request a sub for...")
         .addOptions(options)
       const actionRow1 =
         new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
           subSelectMenu,
         )
+      const pageText = new TextDisplayBuilder().setContent(
+        `-# Page ${currentPage + 1}`,
+      )
       const prevPage = new ButtonBuilder()
         .setCustomId(`lessons_page_${currentPage - 1}_${userId}_${type}`)
-        .setLabel("Previous")
+        .setLabel("Last page")
         .setEmoji("◀️")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(currentPage === 0)
       const nextPage = new ButtonBuilder()
         .setCustomId(`lessons_page_${currentPage + 1}_${userId}_${type}`)
-        .setLabel("Next")
+        .setLabel("Next page")
         .setEmoji("▶️")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(false)
@@ -143,12 +152,14 @@ async function getUserLessonsMessages(userId: string, type: "future" | "all") {
         prevPage,
         nextPage,
       )
-      const embed = new EmbedBuilder()
-        .setTitle("Your Lessons")
-        .setDescription(currentContent)
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(lessonsText)
+        .addTextDisplayComponents(pageText)
+        .addActionRowComponents(actionRow2)
       messages.push({
-        embeds: [embed],
-        components: [actionRow1, actionRow2],
+        flags: "IsComponentsV2",
+        components: options.length > 0 ? [container, actionRow1] : [container],
+        allowedMentions: { users: [] },
       })
       currentContent = ""
       currentLessons = []
@@ -157,10 +168,15 @@ async function getUserLessonsMessages(userId: string, type: "future" | "all") {
   }
 
   for (const lesson of lessons) {
-    const lessonContent = `**#${lesson.course_id} ${lesson.name}** - ${formatTimestamp(lesson.date)} (${formatTimestamp(lesson.date, "R")})`
+    const subRequests = db.getLessonOpenSubRequests(lesson.id)
+    const hasSubRequest = subRequests.some(
+      (r) => r.instructor_id === instructor.id,
+    )
+    const instructors = db.getLessonInstructors(lesson.id)
+    const lessonContent = `**#${lesson.course_id} ${lesson.name}** - ${formatTimestamp(lesson.date)} (${formatLessonInstructorsCompact(instructors)}${hasSubRequest ? ", sub requested" : ""})`
     if (
       currentLessons.length >= 25 ||
-      currentContent.length + lessonContent.length + 1 > 4096
+      currentContent.length + lessonContent.length + 1 > 3500
     ) {
       pushCurrentMessage()
     }
@@ -172,13 +188,19 @@ async function getUserLessonsMessages(userId: string, type: "future" | "all") {
   }
   pushCurrentMessage()
 
-  messages[messages.length - 1]!.components[1]!.components[1]!.setDisabled(true)
-
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i]!
-    message.embeds[0]!.setFooter({
-      text: `Page ${i + 1} of ${messages.length}`,
-    })
+    ;(message.components[0].components[1]! as TextDisplayBuilder).setContent(
+      `-# Page ${i + 1} of ${messages.length}`,
+    )
+  }
+  // no next page on last page hehe
+  ;(
+    messages[messages.length - 1]!.components[0]
+      .components[2]! as ActionRowBuilder<ButtonBuilder>
+  ).components[1]!.setDisabled(true)
+  if (messages.length === 1) {
+    messages[messages.length - 1]!.components[0].spliceComponents(2, 1)
   }
 
   return messages

@@ -144,16 +144,24 @@ class LiveDatabase {
         .get(id)
     )
   }
-  addCourse(id: number, module: number, duration: number): void {
-    // Insert new course
+  addCourse(
+    id: number,
+    module: number,
+    duration: number,
+    flags: number = 0,
+  ): void {
     this.database
-      .query("INSERT INTO courses (id, module, duration) VALUES (?, ?, ?)")
-      .run(id, module, duration)
+      .query(
+        "INSERT INTO courses (id, module, duration, flags) VALUES (?, ?, ?, ?)",
+      )
+      .run(id, module, duration, flags)
   }
   updateCourse(course: Course): void {
     this.database
-      .query("UPDATE courses SET module = ? WHERE id = ?")
-      .run(course.module, course.id)
+      .query(
+        "UPDATE courses SET module = ?, duration = ?, flags = ? WHERE id = ?",
+      )
+      .run(course.module, course.duration, course.flags, course.id)
   }
   removeCourse(id: number): void {
     this.database.query("DELETE FROM courses WHERE id = ?").run(id)
@@ -230,6 +238,9 @@ class LiveDatabase {
       .as(Lesson)
       .all()
   }
+  getAllLessons(): Lesson[] {
+    return this.database.query("SELECT * FROM lessons").as(Lesson).all()
+  }
   getLesson(lessonId: number): Lesson | null {
     return this.database
       .query("SELECT * FROM lessons WHERE id = ?")
@@ -283,13 +294,15 @@ class LiveDatabase {
   removeLesson(lessonId: number): void {
     this.database.query("DELETE FROM lessons WHERE id = ?").run(lessonId)
   }
+  getLessonSubRequests(lessonId: number): SubRequest[] {
+    return this.database
+      .query("SELECT * FROM sub_requests WHERE lesson_id = ?")
+      .as(SubRequest)
+      .all(lessonId)
+  }
   getLessonOpenSubRequests(lessonId: number): SubRequest[] {
     return this.database
-      .query(
-        `SELECT sr.* FROM sub_requests sr
-         JOIN lessons l ON sr.lesson_id = l.id
-         WHERE l.id = ? AND sr.is_open = 1`,
-      )
+      .query("SELECT * FROM sub_requests WHERE lesson_id = ? AND is_open = 1")
       .as(SubRequest)
       .all(lessonId)
   }
@@ -343,6 +356,12 @@ class LiveDatabase {
         "INSERT INTO sub_requests (lesson_id, instructor_id, opened_at, reason) VALUES (?, ?, ?, ?)",
       )
       .run(lessonId, instructorId, Date.now(), reason).lastInsertRowid as number
+  }
+  getAllSubRequests(): SubRequest[] {
+    return this.database
+      .query("SELECT * FROM sub_requests")
+      .as(SubRequest)
+      .all()
   }
   getOpenSubRequests(): SubRequest[] {
     return this.database
@@ -428,7 +447,8 @@ CREATE TABLE IF NOT EXISTS instructors (
 CREATE TABLE IF NOT EXISTS courses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   module INTEGER NOT NULL,
-  duration INTEGER NOT NULL  -- in minutes
+  duration INTEGER NOT NULL,  -- in minutes
+  flags INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS course_instructors (
   course_id INTEGER NOT NULL,

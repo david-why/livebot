@@ -77,7 +77,7 @@ if (command === "deploy") {
   console.log("Google Calendar credentials saved to the database.")
 } else if (command == "clearcalendar") {
   const auth = getClient()
-  const calendar = google.calendar({ version: "v3", auth })
+  const calendar = google.calendar({ version: "v3", auth, retry: true })
   // console.log(items)
   const calendarId = process.env.CALENDAR_ID || "primary"
   const data = await calendar.events.list({

@@ -2,6 +2,7 @@ import { google } from "googleapis"
 import { UserRefreshClient } from "googleapis-common"
 import { db } from "../database"
 import type { Lesson } from "../models/lesson"
+import { CourseFlags } from "../models/course"
 
 interface SyncCalendarOptions {
   callback?: (progress: number) => void
@@ -51,6 +52,13 @@ async function syncCalendarInner(options: SyncCalendarOptions) {
   let i = -1
   for (const lesson of outdatedLessons) {
     i++
+    const course = db.getCourse(lesson.course_id)!
+    if (course.flags & CourseFlags.NoCalendar) {
+      console.log(`Skipping lesson ${lesson.id} due to NoCalendar flag`)
+      lesson.google_event_outdated = 0
+      db.updateLesson(lesson)
+      continue
+    }
     options.callback?.(i / outdatedLessons.length)
     const event = convertLessonToEvent(lesson)
     try {
